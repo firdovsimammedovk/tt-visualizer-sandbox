@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use '../definitions/colours' as *;
+
+$folder-text-size: 15px;
+
+// The select component
+.folder-picker {
+    > .bp6-popover-target {
+        min-width: 243px;
+    }
+
+    .folder-picker-button {
+        width: 250px;
+
+        .bp6-button-text {
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+    }
+}
+
+// Each item in the dropdown
+.folder-picker-menu-item {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: $folder-text-size;
+
+    .bp6-menu-item {
+        padding-left: 5px; // Aligns with search icon padding in the filter field
+    }
+
+    > li {
+        flex-grow: 1; // Lets the item take up the full width of the menu
+        overflow: hidden; // Ensures text-overflow ellipsis works when the text is too long
+    }
+
+    .folder-picker-sub-label {
+        display: block;
+        font-size: 11px;
+        line-height: 1.1;
+        color: $tt-grey-5;
+    }
+}

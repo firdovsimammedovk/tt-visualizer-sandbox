@@ -1,0 +1,53 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+*.tsbuildinfo
+.vite
+
+# We use PNPM
+package-lock.json
+# Local pnpm content-addressed store, created by `pnpm install` when the user's
+# global store path resolves inside the workspace (e.g. when `store-dir` is
+# overridden or when running pnpm from a context without a home-dir store).
+# Hundreds-of-thousands of cache files; must never be committed.
+.pnpm-store/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Backend
+.venv
+myenv
+ttnn_env
+**.sqlite
+**/__pycache__/
+backend/ttnn_visualizer/data
+backend/ttnn_visualizer/static
+/backend/data/*
+backend/*egg-info
+build
+.env
+*.db
+
+# Sphinx documentation build
+docs/output
+.pnpm-store

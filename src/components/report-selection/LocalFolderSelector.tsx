@@ -1,0 +1,402 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import { FileInput, FormGroup, Icon, IconName, Intent } from '@blueprintjs/core';
+import { IconNames } from '@blueprintjs/icons';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+
+import { useQueryClient } from '@tanstack/react-query';
+import { useAtom, useAtomValue } from 'jotai';
+import useLocalConnection from '../../hooks/useLocal';
+import {
+    activePerformanceReportAtom,
+    activeProfilerReportAtom,
+    performanceReportLocationAtom,
+    profilerReportLocationAtom,
+    successfulReportLinksAtom,
+} from '../../store/app';
+import { linkedPerformancePaths, linkedProfilerPaths } from '../../functions/reportLinks';
+import { ConnectionStatus, ConnectionTestStates } from '../../definitions/ConnectionStatus';
+import createToastNotification, { ToastType } from '../../functions/createToastNotification';
+import getResponseError from '../../functions/getResponseError';
+import getServerConfig from '../../functions/getServerConfig';
+import {
+    PERFORMANCE_FOLDER_QUERY_KEY,
+    PROFILER_FOLDER_QUERY_KEY,
+    deletePerformance,
+    deleteProfiler,
+    updateInstance,
+    usePerfFolderList,
+    useReportFolderList,
+    useReportMetadata,
+} from '../../hooks/useAPI';
+import LocalFolderPicker from './LocalFolderPicker';
+import { ReportFolder, ReportLocation } from '../../definitions/Reports';
+import {
+    createDataIntegrityWarning,
+    hasBeenNormalised,
+    normaliseReportFolder,
+} from '../../functions/validateReportFolder';
+import { TEST_IDS } from '../../definitions/TestIds';
+import { DBVersionValidation, evaluateDbVersion } from '../../functions/compareDbVersion';
+
+const ICON_MAP: Record<ConnectionTestStates, IconName> = {
+    [ConnectionTestStates.IDLE]: IconNames.DOT,
+    [ConnectionTestStates.PROGRESS]: IconNames.DOT,
+    [ConnectionTestStates.FAILED]: IconNames.CROSS,
+    [ConnectionTestStates.OK]: IconNames.TICK,
+    [ConnectionTestStates.WARNING]: IconNames.WARNING_SIGN,
+};
+
+const INTENT_MAP: Record<ConnectionTestStates, Intent> = {
+    [ConnectionTestStates.IDLE]: Intent.NONE,
+    [ConnectionTestStates.PROGRESS]: Intent.WARNING,
+    [ConnectionTestStates.FAILED]: Intent.DANGER,
+    [ConnectionTestStates.OK]: Intent.SUCCESS,
+    [ConnectionTestStates.WARNING]: Intent.WARNING,
+};
+
+const connectionOkStatus: ConnectionStatus = {
+    status: ConnectionTestStates.OK,
+    message: 'Files uploaded successfully',
+};
+
+const invalidReportStatus: ConnectionStatus = {
+    status: ConnectionTestStates.FAILED,
+    message: 'Selected directory does not contain a valid report',
+};
+
+const invalidProfilerStatus: ConnectionStatus = {
+    status: ConnectionTestStates.FAILED,
+    message: 'Selected directory does not contain a valid report',
+};
+
+const directoryErrorStatus: ConnectionStatus = {
+    status: ConnectionTestStates.FAILED,
+    message: 'Selected directory does not contain a valid report',
+};
+
+const LocalFolderOptions = () => {
+    const queryClient = useQueryClient();
+    const [profilerReportLocation, setProfilerReportLocation] = useAtom(profilerReportLocationAtom);
+    const [performanceReportLocation, setPerformanceReportLocation] = useAtom(performanceReportLocationAtom);
+    const [activeProfilerReport, setActiveProfilerReport] = useAtom(activeProfilerReportAtom);
+    const [activePerformanceReport, setActivePerformanceReport] = useAtom(activePerformanceReportAtom);
+
+    const {
+        uploadLocalFolder,
+        uploadLocalPerformanceFolder,
+        checkRequiredReportFiles,
+        checkRequiredProfilerFiles,
+        filterReportFiles,
+    } = useLocalConnection();
+    const { data: perfFolderList } = usePerfFolderList();
+    const { data: reportFolderList } = useReportFolderList();
+
+    const { data: reportMetadata, error: reportMetadataError } = useReportMetadata();
+    useEffect(() => {
+        if (reportMetadataError) {
+            return;
+        }
+        if (reportMetadata) {
+            const dbValidationResult = evaluateDbVersion(reportMetadata.version);
+            if (dbValidationResult.statusCode !== DBVersionValidation.OK) {
+                // @ts-expect-error this is good
+                createToastNotification('Incompatible report version', dbValidationResult.message, ToastType.WARNING);
+            }
+        }
+    }, [reportMetadata, reportMetadataError]);
+
+    const [profilerFolder, setProfilerFolder] = useState<ConnectionStatus | undefined>();
+    const [isUploadingReport, setIsUploadingReport] = useState(false);
+    const [isUploadingPerformance, setIsPerformanceUploading] = useState(false);
+    const [profilerUploadLabel, setProfilerUploadLabel] = useState('Choose directory...');
+    const [performanceFolder, setPerformanceFolder] = useState<ConnectionStatus | undefined>();
+    const [performanceDataUploadLabel, setPerformanceDataUploadLabel] = useState('Choose directory...');
+
+    const isProfilerLocal = profilerReportLocation === ReportLocation.LOCAL;
+    const isPerformanceLocal = performanceReportLocation === ReportLocation.LOCAL;
+
+    const folderPickerValue = useMemo(
+        () =>
+            activeProfilerReport &&
+            reportFolderList?.some((folder: ReportFolder) => folder.path.includes(activeProfilerReport.path)) &&
+            isProfilerLocal
+                ? activeProfilerReport.path
+                : null,
+        [activeProfilerReport, reportFolderList, isProfilerLocal],
+    );
+
+    const perfFolderPickerValue = useMemo(
+        () =>
+            activePerformanceReport &&
+            perfFolderList?.some((folder: ReportFolder) => folder.path.includes(activePerformanceReport.path)) &&
+            isPerformanceLocal
+                ? activePerformanceReport.path
+                : null,
+        [activePerformanceReport, perfFolderList, isPerformanceLocal],
+    );
+
+    const reportLinks = useAtomValue(successfulReportLinksAtom);
+
+    const isDirectReportMode = !!getServerConfig()?.TT_METAL_HOME;
+    const isReportLinkingEnabled = !!getServerConfig()?.REPORT_LINKING_ENABLED;
+
+    // Performance reports that have linked with the active memory report (and vice versa).
+    // Experimental: only surfaced in development builds.
+    const linkedPerfPaths = useMemo(
+        () =>
+            isReportLinkingEnabled
+                ? linkedPerformancePaths(reportLinks, activeProfilerReport?.path, profilerReportLocation)
+                : undefined,
+        [reportLinks, activeProfilerReport, profilerReportLocation, isReportLinkingEnabled],
+    );
+    const linkedProfilerReportPaths = useMemo(
+        () =>
+            isReportLinkingEnabled
+                ? linkedProfilerPaths(reportLinks, activePerformanceReport?.path, performanceReportLocation)
+                : undefined,
+        [reportLinks, activePerformanceReport, performanceReportLocation, isReportLinkingEnabled],
+    );
+
+    const handleReportDirectoryOpen = async (e: ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) {
+            return;
+        }
+
+        const { files: unfilteredFiles } = e.target;
+        const files = filterReportFiles(unfilteredFiles);
+
+        if (!checkRequiredReportFiles(files)) {
+            setProfilerFolder(invalidReportStatus);
+            return;
+        }
+
+        setIsUploadingReport(true);
+        setProfilerUploadLabel(`${files.length} files selected.`);
+
+        try {
+            const response = await uploadLocalFolder(files);
+
+            setProfilerUploadLabel(`${files.length} files uploaded`);
+            response.data = normaliseReportFolder(response.data);
+
+            if (hasBeenNormalised(response?.data)) {
+                createDataIntegrityWarning(response.data);
+            }
+
+            const updatedReport = {
+                path: response.data.path,
+                reportName: response.data.reportName,
+            };
+
+            setActiveProfilerReport(updatedReport);
+            createToastNotification('Active memory report', updatedReport.reportName, ToastType.SUCCESS);
+            setProfilerReportLocation(ReportLocation.LOCAL);
+            setProfilerFolder(connectionOkStatus);
+        } catch (err: unknown) {
+            const message = getResponseError(err, 'Unable to upload selected directory');
+            setProfilerFolder({ status: ConnectionTestStates.FAILED, message });
+        } finally {
+            queryClient.clear();
+            setIsUploadingReport(false);
+        }
+    };
+
+    const handlePerformanceDirectoryOpen = async (e: ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files) {
+            return;
+        }
+
+        const { files: unfilteredFiles } = e.target;
+        const files = filterReportFiles(unfilteredFiles);
+
+        if (!checkRequiredProfilerFiles(files)) {
+            setPerformanceFolder(invalidProfilerStatus);
+            return;
+        }
+
+        setIsPerformanceUploading(true);
+        setPerformanceDataUploadLabel(`${files.length} files selected`);
+
+        try {
+            const response = await uploadLocalPerformanceFolder(files);
+
+            if (response?.data?.status !== ConnectionTestStates.OK) {
+                setPerformanceFolder(directoryErrorStatus);
+            } else {
+                const fileName = getFolderName(files);
+                setPerformanceDataUploadLabel(`${files.length} files uploaded`);
+                setPerformanceReportLocation(ReportLocation.LOCAL);
+                setActivePerformanceReport({ path: fileName, reportName: fileName });
+                createToastNotification('Active performance report', fileName, ToastType.SUCCESS);
+                setPerformanceFolder(connectionOkStatus);
+            }
+        } catch (err: unknown) {
+            const message = getResponseError(err, 'Unable to upload selected directory');
+            setPerformanceFolder({ status: ConnectionTestStates.FAILED, message });
+        } finally {
+            queryClient.clear();
+            setIsPerformanceUploading(false);
+        }
+    };
+
+    const handleSelectProfiler = async (folder: ReportFolder) => {
+        // Backend handles updating only the specific parts of active_report
+        await updateInstance({
+            active_report: { profiler_name: folder.path, profiler_location: ReportLocation.LOCAL },
+        });
+
+        if (hasBeenNormalised(folder)) {
+            createDataIntegrityWarning(folder);
+        }
+
+        createToastNotification('Active memory report', folder.reportName ?? '', ToastType.SUCCESS);
+        setActiveProfilerReport(folder);
+        setProfilerReportLocation(ReportLocation.LOCAL);
+    };
+
+    const handleDeleteProfiler = async (folder: ReportFolder) => {
+        await deleteProfiler(folder.path);
+        await queryClient.invalidateQueries({ queryKey: [PROFILER_FOLDER_QUERY_KEY] });
+
+        createToastNotification('Memory report deleted', folder.reportName, ToastType.INFO);
+
+        if (activeProfilerReport?.path === folder.path) {
+            setActiveProfilerReport(null);
+            setProfilerUploadLabel('Choose directory...');
+            setProfilerFolder(undefined);
+        }
+    };
+
+    const handleSelectPerformance = async (folder: ReportFolder) => {
+        // Backend handles updating only the specific parts of active_report
+        await updateInstance({
+            active_report: { performance_name: folder.path, performance_location: ReportLocation.LOCAL },
+        });
+
+        createToastNotification('Active performance report', folder.reportName, ToastType.SUCCESS);
+        setActivePerformanceReport(folder);
+        setPerformanceReportLocation(ReportLocation.LOCAL);
+    };
+
+    const handleDeletePerformance = async (folder: ReportFolder) => {
+        await deletePerformance(folder.path);
+        await queryClient.invalidateQueries({ queryKey: [PERFORMANCE_FOLDER_QUERY_KEY] });
+
+        createToastNotification(`Performance report deleted`, folder.reportName, ToastType.INFO);
+
+        if (activePerformanceReport?.path === folder.path) {
+            setActivePerformanceReport(null);
+            setPerformanceDataUploadLabel('Choose directory...');
+            setPerformanceFolder(undefined);
+        }
+    };
+
+    return (
+        <>
+            <FormGroup
+                className='form-group'
+                label={<h3 className='label'>Memory report</h3>}
+                subLabel='Select a memory report'
+            >
+                <LocalFolderPicker
+                    items={reportFolderList}
+                    value={isProfilerLocal ? folderPickerValue : null}
+                    valueLabel={activeProfilerReport?.reportName ?? null}
+                    handleSelect={handleSelectProfiler}
+                    handleDelete={handleDeleteProfiler}
+                    linkedPaths={linkedProfilerReportPaths}
+                    showReportName
+                />
+            </FormGroup>
+
+            {!isDirectReportMode && (
+                <FormGroup subLabel='Upload a local memory report'>
+                    <div className='form-container'>
+                        <FileInput
+                            id='local-upload'
+                            onInputChange={handleReportDirectoryOpen}
+                            text={profilerUploadLabel}
+                            inputProps={{
+                                // @ts-expect-error 'directory' (needed for Safari) and 'webkitdirectory' - TypeScript’s DOM types do not include non-standard attributes
+                                directory: '',
+                                webkitdirectory: '',
+                                multiple: true,
+                                'data-testid': TEST_IDS.LOCAL_PROFILER_UPLOAD,
+                            }}
+                        />
+
+                        {profilerFolder && !isUploadingReport && (
+                            <div
+                                className='folder-upload-status'
+                                data-testid={TEST_IDS.LOCAL_PROFILER_STATUS}
+                            >
+                                <Icon
+                                    icon={ICON_MAP[profilerFolder.status]}
+                                    size={20}
+                                    intent={INTENT_MAP[profilerFolder.status]}
+                                />
+
+                                <span className='message'>{profilerFolder.message}</span>
+                            </div>
+                        )}
+                    </div>
+                </FormGroup>
+            )}
+            <FormGroup
+                className='form-group'
+                label={<h3 className='label'>Performance report</h3>}
+                subLabel='Select a performance report'
+            >
+                <LocalFolderPicker
+                    items={perfFolderList}
+                    value={isPerformanceLocal ? perfFolderPickerValue : null}
+                    valueLabel={activePerformanceReport?.reportName ?? null}
+                    handleSelect={handleSelectPerformance}
+                    handleDelete={handleDeletePerformance}
+                    linkedPaths={linkedPerfPaths}
+                />
+            </FormGroup>
+
+            {!isDirectReportMode && (
+                <FormGroup subLabel='Upload a local performance report'>
+                    <div className='form-container'>
+                        <FileInput
+                            id='local-performance-upload'
+                            onInputChange={handlePerformanceDirectoryOpen}
+                            text={performanceDataUploadLabel}
+                            inputProps={{
+                                // @ts-expect-error 'directory' (needed for Safari) and 'webkitdirectory' - TypeScript’s DOM types do not include non-standard attributes
+                                directory: '',
+                                webkitdirectory: '',
+                                multiple: true,
+                                'data-testid': TEST_IDS.LOCAL_PERFORMANCE_UPLOAD,
+                            }}
+                        />
+
+                        {performanceFolder && !isUploadingPerformance && (
+                            <div
+                                className='folder-upload-status'
+                                data-testid={TEST_IDS.LOCAL_PERFORMANCE_STATUS}
+                            >
+                                <Icon
+                                    icon={ICON_MAP[performanceFolder.status]}
+                                    size={20}
+                                    intent={INTENT_MAP[performanceFolder.status]}
+                                />
+
+                                <span className='message'>{performanceFolder.message}</span>
+                            </div>
+                        )}
+                    </div>
+                </FormGroup>
+            )}
+        </>
+    );
+};
+
+const getFolderName = (files: FileList) => files[0].webkitRelativePath.split('/')[0];
+
+export default LocalFolderOptions;

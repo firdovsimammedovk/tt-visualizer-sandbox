@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import classNames from 'classnames';
+
+interface HighlightedTextProps {
+    text: string;
+    filter: string;
+    className?: string;
+}
+
+const HighlightedText = ({ text, filter, className }: HighlightedTextProps) => {
+    const index = text.toLowerCase().indexOf(filter.toLowerCase());
+
+    if (index === -1) {
+        return (
+            <span
+                title={text}
+                className={classNames('highlighted-text', className)}
+            >
+                {text}
+            </span>
+        );
+    }
+
+    const before = text.substring(0, index);
+    const match = text.substring(index, index + filter.length);
+    const after = text.substring(index + filter.length);
+
+    return (
+        <span
+            title={text}
+            className={classNames('highlighted-text', className)}
+        >
+            {before}
+            <mark>{match}</mark>
+            {after}
+        </span>
+    );
+};
+
+export default HighlightedText;

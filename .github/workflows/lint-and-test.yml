@@ -1,0 +1,90 @@
+name: Lint and Test
+
+on:
+  pull_request:
+    branches: [ "dev" ]
+  workflow_dispatch:
+
+jobs:
+  lint-and-test:
+    name: Lint and Test (Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        name: Install pnpm
+        with:
+          run_install: false
+
+      -   name: Read .nvmrc
+          id: nvm
+          run: echo "NODE_VERSION=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+
+      -   name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+              node-version: ${{ steps.nvm.outputs.NODE_VERSION }}
+              cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Get changed files in PR
+        id: pr_changes
+        run: |
+            git fetch origin ${{ github.base_ref }} --depth=1
+            # Get changed files, filter for .ts and .tsx, exclude deleted files, output as space-separated string
+            CHANGED_FILES=$(git diff --name-only --diff-filter=d origin/${{ github.base_ref }} | grep -E '\.(ts|tsx)$' | tr '\n' ' ' | xargs)
+            echo "changed=$CHANGED_FILES" >> $GITHUB_OUTPUT
+
+      - name: Lint and test
+        run: |
+            if [ -n "${{ steps.pr_changes.outputs.changed }}" ]; then
+                pnpm lint ${{ steps.pr_changes.outputs.changed }} --report-unused-disable-directives --max-warnings 0
+            else
+                echo "No .ts or .tsx files changed. Skipping lint."
+            fi
+            pnpm test
+
+  backend-lint-and-test:
+    name: Lint and Test (Backend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read .python-version
+        id: python
+        run: echo "PYTHON_VERSION=$(cat .python-version)" >> $GITHUB_OUTPUT
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ steps.python.outputs.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Verify lockfile is up to date
+        run: |
+          set -euo pipefail
+          uv lock --check || {
+            status=$?
+            echo "::error file=uv.lock::'uv lock --check' failed (uv.lock may be out of date with pyproject.toml). Run 'uv lock' locally and commit the updated uv.lock. See logs above for details."
+            exit "${status}"
+          }
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run Black
+        run: uv run --frozen black --check backend/ttnn_visualizer
+
+      - name: Run isort
+        run: uv run --frozen isort --check-only backend/ttnn_visualizer
+
+      - name: Run Mypy
+        run: uv run --frozen mypy backend/ttnn_visualizer
+
+      - name: Run Backend Tests
+        run: uv run --frozen pytest backend/ttnn_visualizer

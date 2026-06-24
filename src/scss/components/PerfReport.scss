@@ -1,0 +1,260 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use '../definitions/variables' as *;
+@use '../definitions/colours' as colours;
+@use '../mixins/perfReportColours' as perf;
+
+$row-pattern-0: linear-gradient(90deg, transparent 50%, rgb(255 255 255 / 5%) 50%);
+$row-pattern-1: linear-gradient(0deg, transparent 50%, rgb(255 255 255 / 5%) 50%);
+$row-pattern-2: linear-gradient(45deg, transparent 50%, rgb(255 255 255 / 5%) 50%);
+$header-footer-border: 2px solid colours.$tt-grey-5;
+
+.perf-report {
+    color: #fff;
+    min-width: 1240px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+
+    .report-tabs {
+        > .bp6-tab-list {
+            flex-wrap: wrap;
+        }
+
+        > .bp6-tab-panel {
+            margin-top: 10px;
+        }
+    }
+
+    .report-header {
+        display: flex;
+        width: 100%;
+        justify-content: space-between;
+
+        .title {
+            margin-bottom: 0;
+        }
+    }
+
+    .op-tooltip {
+        font-family: $base-font;
+    }
+
+    .perf-table {
+        border-collapse: collapse;
+        width: 100%;
+
+        .skeleton-cell {
+            display: block;
+            height: 14px;
+            min-width: 40px;
+        }
+    }
+
+    .header-aside {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .result-count {
+        margin-bottom: 0;
+    }
+
+    .filters-container {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .option-row {
+        display: flex;
+        flex-wrap: nowrap;
+        column-gap: 10px;
+        align-items: stretch;
+        margin-bottom: 0;
+
+        .form-group {
+            display: inline-flex;
+            margin-bottom: 0;
+        }
+
+        .select-group {
+            align-items: flex-start;
+            column-gap: 5px;
+            margin-right: 10px;
+        }
+
+        .switch-group {
+            column-gap: 5px;
+            margin-right: 5px;
+            margin-bottom: 0;
+
+            .option-switch {
+                margin-top: 7px;
+                margin-bottom: 0;
+            }
+        }
+    }
+
+    .view-options {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .multi-device-note {
+        width: auto;
+        display: inline-block;
+        margin-bottom: 10px;
+    }
+
+    .cell-header {
+        text-align: left;
+        vertical-align: initial;
+        padding: 3px;
+
+        .header-label {
+            font-weight: 400;
+            white-space: nowrap;
+            display: block;
+
+            &.no-button {
+                height: 22px;
+            }
+        }
+
+        .bp6-button {
+            background-color: transparent;
+            width: 100%;
+            padding-left: 2px;
+            padding-right: 2px;
+        }
+
+        .bp6-button-text {
+            display: flex;
+            flex-grow: 1;
+            justify-content: space-between;
+        }
+    }
+
+    .sort-icon {
+        opacity: 0.2;
+
+        &.is-active {
+            opacity: 1;
+        }
+    }
+
+    tbody {
+        tr {
+            &:hover {
+                background-color: rgb(255 255 255 / 5%);
+            }
+
+            &.is-selected {
+                background-color: rgb(255 255 255 / 10%);
+            }
+
+            &.comparison-row {
+                border-bottom: 2px solid colours.$tt-sand-shade;
+                background-size: 5px 5px;
+                height: 12px; // Add a more visible height for empty rows
+
+                &.pattern-0 {
+                    background-image: $row-pattern-0;
+                }
+
+                &.pattern-1 {
+                    background-image: $row-pattern-1;
+                }
+
+                &.pattern-2 {
+                    background-image: $row-pattern-2;
+                }
+            }
+
+            &:last-child {
+                border-bottom: none;
+
+                > td {
+                    border-bottom: none;
+                }
+            }
+        }
+    }
+
+    .perf-tensor-trigger-wrapper {
+        display: inline-flex;
+
+        .perf-tensor-trigger {
+            background-color: transparent;
+        }
+    }
+
+    .missing-data {
+        background-color: colours.$tt-red-shade;
+
+        &:hover {
+            background-color: colours.$tt-red-shade;
+        }
+    }
+
+    .signpost-op {
+        background-color: rgba(colours.$tt-yellow-shade, 0.2);
+    }
+
+    .cell {
+        border-bottom: 1px solid #333;
+        padding: 0.25rem;
+
+        &.align-right {
+            text-align: right;
+        }
+
+        &.advice {
+            border-bottom: none;
+        }
+
+        .l1-fullness-attributes {
+            font-size: 12px;
+        }
+    }
+
+    .table-header {
+        border-bottom: $header-footer-border;
+    }
+
+    .table-footer {
+        border-top: $header-footer-border;
+        font-style: italic;
+
+        td {
+            padding: 1rem 0.25rem;
+
+            &.pre-wrap {
+                white-space: pre-wrap;
+            }
+        }
+    }
+
+    .error-message {
+        display: inline-flex;
+        justify-content: center;
+        gap: 5px;
+        color: colours.$tt-yellow;
+    }
+
+    .high-dispatch-advice {
+        border-top: 1px solid colours.$tt-white;
+        padding-top: 20px;
+        color: colours.$tt-yellow-tint-1;
+    }
+
+    @include perf.perf-report-colours;
+}

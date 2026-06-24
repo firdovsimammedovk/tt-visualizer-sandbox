@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import { Button, Classes, Intent, Overlay2 } from '@blueprintjs/core';
+import classNames from 'classnames';
+import { ReactNode } from 'react';
+import 'styles/components/Overlay.scss';
+
+interface OverlayProps {
+    isOpen: boolean;
+    onOpened?: () => void;
+    onClose?: () => void;
+    children: ReactNode;
+    hideCloseButton?: boolean;
+    canEscapeKeyClose?: boolean;
+    canOutsideClickClose?: boolean;
+    lazy?: boolean;
+}
+
+function Overlay({
+    isOpen,
+    onOpened,
+    onClose,
+    children,
+    hideCloseButton = false,
+    canEscapeKeyClose = true,
+    canOutsideClickClose = true,
+    lazy,
+}: OverlayProps) {
+    return (
+        <Overlay2
+            isOpen={isOpen}
+            onOpened={onOpened}
+            onClose={onClose}
+            className={Classes.OVERLAY_SCROLL_CONTAINER}
+            canEscapeKeyClose={canEscapeKeyClose}
+            canOutsideClickClose={canOutsideClickClose}
+            lazy={lazy}
+        >
+            <div className={classNames('overlay-contents', Classes.DARK, Classes.CARD, Classes.ELEVATION_4)}>
+                {children}
+
+                {!hideCloseButton && (
+                    <div className={Classes.DIALOG_FOOTER_ACTIONS}>
+                        <Button
+                            intent={Intent.DANGER}
+                            onClick={onClose}
+                        >
+                            Close
+                        </Button>
+                    </div>
+                )}
+            </div>
+        </Overlay2>
+    );
+}
+
+export default Overlay;

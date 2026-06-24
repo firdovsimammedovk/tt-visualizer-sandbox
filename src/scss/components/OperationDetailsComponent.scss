@@ -1,0 +1,212 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use '../definitions/colours' as *;
+@use '../definitions/variables' as variables;
+@use '../mixins/scrollShade' as scrollShade;
+
+.operation-details-component {
+    .core-view-buttons {
+        display: flex;
+        gap: 5px;
+        margin-bottom: 20px;
+    }
+
+    .chart-controls {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        margin-bottom: 20px;
+
+        .bp6-control {
+            margin-bottom: 0;
+        }
+    }
+
+    .controls {
+        display: inline-flex;
+        flex-direction: column;
+        margin-bottom: 0;
+        align-items: flex-start;
+    }
+
+    .circular-buffers-plot-title {
+        display: inline-flex;
+        align-items: center;
+        color: $tt-green;
+        margin-bottom: -5px;
+        font-weight: normal;
+
+        .bp6-icon {
+            margin-right: 5px;
+        }
+    }
+
+    .device-operations {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .device-operation-name {
+        margin-bottom: 4px;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+    }
+
+    .legend {
+        margin-bottom: 20px;
+        margin-top: 20px;
+        padding-right: 15px;
+
+        @include scrollShade.scroll-shade(10px);
+
+        &.nested-legend {
+            padding-left: 18px;
+        }
+
+        &.lengthy-legend {
+            max-height: 410px;
+            overflow-y: scroll;
+        }
+
+        h4 {
+            margin: 0;
+        }
+    }
+
+    .plot-title {
+        font-weight: 500;
+        margin-bottom: -14px;
+        margin-top: 0;
+    }
+
+    .plot-instructions {
+        margin-top: -25px;
+        margin-bottom: 20px;
+        text-align: right;
+        padding-right: 5px;
+        padding-left: 5px;
+
+        &.hidden {
+            display: none;
+        }
+    }
+
+    .plot-instructions-floating {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: $tt-white;
+        color: $tt-black;
+        padding: 10px;
+
+        &.hidden {
+            display: none;
+        }
+    }
+
+    .not-found-message {
+        font-size: 20px;
+        margin-top: 10px;
+    }
+
+    .arguments-wrapper {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
+
+    .no-buffer-type-selected {
+        margin-top: 30px;
+        margin-bottom: 30px;
+    }
+
+    .deallocate-msg {
+        margin-top: -18px;
+        padding-left: 18px;
+    }
+
+    .zoom-range-wrap {
+        position: relative;
+        overflow-x: hidden;
+    }
+
+    .memory-zoom-range {
+        $zoom-range-margin: 15px;
+
+        margin-left: $zoom-range-margin;
+        max-width: calc(100% - #{$zoom-range-margin * 2});
+
+        &::before,
+        &::after {
+            content: '';
+            background-color: #fffe;
+            display: block;
+            position: absolute;
+            width: 10px;
+            height: 16px;
+            top: 4.5px;
+            border: 1px solid #000;
+            z-index: variables.$z-index-0-background;
+        }
+
+        &::before {
+            margin-left: -10px;
+            border-right: none;
+        }
+
+        &::after {
+            right: -10px;
+            border-left: none;
+        }
+
+        &.bp6-disabled {
+            opacity: 0.3;
+
+            .bp6-slider-label {
+                opacity: 0;
+            }
+        }
+
+        .bp6-slider-axis {
+            opacity: 0;
+        }
+
+        .bp6-slider-progress:nth-of-type(2) {
+            opacity: 0;
+        }
+
+        .bp6-slider-track,
+        .bp6-slider-progress {
+            height: 15px;
+        }
+
+        .bp6-slider-handle.bp6-start,
+        .bp6-slider-handle.bp6-end {
+            margin-top: 4px;
+        }
+
+        .bp6-slider-handle {
+            background-color: $tt-yellow;
+        }
+    }
+
+    .memory-zoom-range-label {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+        margin-left: 10px;
+        margin-bottom: 5px;
+
+        &[disabled] {
+            opacity: 0.75;
+        }
+    }
+
+    .memory-zoom-range-reset {
+        z-index: variables.$z-index-2-interactive;
+    }
+}

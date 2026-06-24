@@ -1,0 +1,368 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import classNames from 'classnames';
+import { useAtomValue } from 'jotai';
+import { IconNames } from '@blueprintjs/icons';
+import { Icon, Intent, Switch } from '@blueprintjs/core';
+import { Fragment } from 'react/jsx-runtime';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import MemoryPlotRenderer from './MemoryPlotRenderer';
+import { OperationDetails } from '../../model/OperationDetails';
+import { MemoryLegendElement } from './MemoryLegendElement';
+import { selectedAddressAtom, showMemoryRegionsAtom } from '../../store/app';
+import {
+    BufferRenderConfiguration,
+    CBRenderConfiguration,
+    L1RenderConfiguration,
+    L1SmallRenderConfiguration,
+    L1_SMALL_MARKER_COLOR,
+    L1_START_MARKER_COLOR,
+    MAX_LEGEND_LENGTH,
+    PlotMouseEventCustom,
+} from '../../definitions/PlotConfigurations';
+import { BufferType } from '../../model/BufferType';
+import { FragmentationEntry, MarkerType } from '../../model/APIData';
+import { MemoryLegendGroup } from './MemoryLegendGroup';
+import { useGetL1SmallMarker, useGetL1StartMarker } from '../../hooks/useAPI';
+import useScrollShade from '../../hooks/useScrollShade';
+
+interface L1PlotsProps {
+    operationDetails: OperationDetails;
+    previousOperationDetails: OperationDetails;
+    zoomedInViewMainMemory: boolean;
+    plotZoomRangeStart: number;
+    plotZoomRangeEnd: number;
+    showCircularBuffer: boolean;
+    showL1Small: boolean;
+    onBufferClick: (event: Readonly<PlotMouseEventCustom>) => void;
+    onLegendClick: (address: number, tensorId?: number, colorVariance?: number) => void;
+}
+
+const MEMORY_ZOOM_PADDING_RATIO = 0.01;
+
+function L1Plots({
+    operationDetails,
+    previousOperationDetails,
+    zoomedInViewMainMemory,
+    plotZoomRangeStart,
+    plotZoomRangeEnd,
+    showCircularBuffer,
+    showL1Small,
+    onBufferClick,
+    onLegendClick,
+}: L1PlotsProps) {
+    const l1SmallMarker = useGetL1SmallMarker();
+    const l1StartMarker = useGetL1StartMarker();
+    const showMemoryRegions = useAtomValue(showMemoryRegionsAtom);
+    const selectedAddress = useAtomValue(selectedAddressAtom);
+    const { chartData, memory, fragmentation, cbChartData, cbChartDataByOperation, bufferChartDataByOperation } =
+        operationDetails.memoryData();
+    const { hasScrolledFromTop, hasScrolledToBottom, updateScrollShade, resetScrollShade, shadeClasses } =
+        useScrollShade();
+    const [zoomedInViewCBMemory, setZoomedInViewCBMemory] = useState(false);
+    const scrollElementRef = useRef<HTMLDivElement>(null);
+
+    const { chartData: previousChartData } = previousOperationDetails.memoryData();
+    const {
+        chartData: l1SmallChartData,
+        memory: l1SmallMemory,
+        condensedChart: l1SmallCondensedChart,
+    } = operationDetails.memoryData(BufferType.L1_SMALL);
+
+    const cbZoomStart = operationDetails.deviceOperations
+        .map((op) => op.cbList.map((cb) => cb.address))
+        .flat()
+        .sort((a, b) => a - b)[0];
+
+    const cbZoomEnd = operationDetails.deviceOperations
+        .map((op) => op.cbList.map((cb) => cb.address + cb.size))
+        .flat()
+        .sort((a, b) => a - b)
+        .reverse()[0];
+
+    const l1SmallZoomStart = l1SmallChartData
+        .map((op) => op?.memoryData?.address)
+        .flat()
+        .sort()[0] as number;
+
+    const l1SmallZoomEnd = l1SmallChartData
+        .map((op) => (op?.memoryData ? op.memoryData.address + op.memoryData.size : 0))
+        .flat()
+        .sort()
+        .reverse()[0] as number;
+
+    const MEMORY_PADDING_CB = (cbZoomEnd - cbZoomStart) * MEMORY_ZOOM_PADDING_RATIO;
+    const MEMORY_PADDING_L1 = (plotZoomRangeEnd - plotZoomRangeStart) * MEMORY_ZOOM_PADDING_RATIO;
+    const MEMORY_PADDING_L1_SMALL = (l1SmallZoomEnd - l1SmallZoomStart) * MEMORY_ZOOM_PADDING_RATIO;
+
+    const { memorySizeL1, getGroupedMemoryReport } = operationDetails;
+
+    const memoryReport: FragmentationEntry[] = [...memory, ...fragmentation].sort((a, b) => a.address - b.address);
+    const groupedMemoryReport = getGroupedMemoryReport(BufferType.L1);
+    const isLengthyLegend = memoryReport.length > MAX_LEGEND_LENGTH;
+
+    const memoryReportWithCB: FragmentationEntry[] = [
+        ...memoryReport,
+        ...operationDetails.deviceOperations
+            .map((op) =>
+                op.cbList.map(
+                    (cb) =>
+                        ({
+                            ...cb,
+                            markerType: MarkerType.CB,
+                            colorVariance: op.id,
+                        }) as FragmentationEntry,
+                ),
+            )
+            .flat(),
+    ].sort((a, b) => a.address - b.address);
+
+    // keeping for now, to make sure nothing breaks
+    // const bufferZoomRangeStart = Math.min(...bufferMemory.map((chunk) => chunk.address));
+    // const bufferZoomRangeEnd = Math.max(...bufferMemory.map((chunk) => chunk.address + chunk.size));
+
+    const zoomRangeStart = plotZoomRangeStart; // Math.min(plotZoomRangeStart, bufferZoomRangeStart);
+    const zoomRangeEnd = plotZoomRangeEnd; // Math.max(plotZoomRangeEnd, bufferZoomRangeEnd);
+    const userL1ZoomRange = useMemo(
+        () => (zoomedInViewMainMemory ? ([plotZoomRangeStart, plotZoomRangeEnd] as [number, number]) : undefined),
+        [zoomedInViewMainMemory, plotZoomRangeStart, plotZoomRangeEnd],
+    );
+
+    const memoryRegionsMarkers = showMemoryRegions
+        ? [
+              {
+                  color: L1_START_MARKER_COLOR,
+                  address: l1StartMarker,
+              },
+              {
+                  color: L1_SMALL_MARKER_COLOR,
+                  address: l1SmallMarker,
+              },
+          ]
+        : [];
+
+    const handleUserScrolling = useCallback(() => {
+        if (scrollElementRef.current) {
+            updateScrollShade(scrollElementRef.current);
+        }
+    }, [updateScrollShade]);
+
+    useEffect(() => {
+        if (scrollElementRef?.current) {
+            if (scrollElementRef.current.scrollTop === 0) {
+                resetScrollShade();
+            } else {
+                updateScrollShade(scrollElementRef.current);
+            }
+        }
+    }, [updateScrollShade, resetScrollShade]);
+
+    return (
+        <>
+            <MemoryPlotRenderer
+                title='Previous Summarized L1 Report'
+                className={classNames('l1-memory-renderer', {
+                    'empty-plot': previousChartData.length === 0,
+                })}
+                plotZoomRange={[zoomRangeStart - MEMORY_PADDING_L1, zoomRangeEnd + MEMORY_PADDING_L1]}
+                chartDataList={[previousChartData]}
+                isZoomedIn={zoomedInViewMainMemory}
+                memoryZoomEnd={memorySizeL1}
+                configuration={L1RenderConfiguration}
+                markers={memoryRegionsMarkers}
+            />
+
+            <MemoryPlotRenderer
+                title='Current Summarized L1 Report'
+                className={classNames('l1-memory-renderer', {
+                    'empty-plot': chartData.length === 0 && cbChartDataByOperation.size === 0,
+                })}
+                isZoomedIn={zoomedInViewMainMemory}
+                plotZoomRange={[zoomRangeStart - MEMORY_PADDING_L1, zoomRangeEnd + MEMORY_PADDING_L1]}
+                chartDataList={[cbChartData, chartData, l1SmallMemory.length > 0 ? l1SmallCondensedChart : []]}
+                memoryZoomEnd={memorySizeL1}
+                onBufferClick={onBufferClick}
+                configuration={L1RenderConfiguration}
+                markers={memoryRegionsMarkers}
+            />
+            {bufferChartDataByOperation.size > 0 && (
+                <>
+                    <h3>Device Operation Tensors</h3>
+                    <br />
+
+                    {[...bufferChartDataByOperation.entries()].map(
+                        ([{ name: deviceOperationName }, plotData], index) => (
+                            <Fragment key={`${deviceOperationName}-${index}`}>
+                                <h5 className='buffers-plot-title'>
+                                    <Icon
+                                        className='operation-icon'
+                                        size={13}
+                                        intent={Intent.SUCCESS}
+                                        icon={IconNames.CUBE_ADD}
+                                    />{' '}
+                                    <span>{deviceOperationName}</span>
+                                </h5>
+                                <MemoryPlotRenderer
+                                    title=''
+                                    className='l1-memory-renderer interm-buffers'
+                                    chartDataList={[plotData]}
+                                    plotZoomRange={[
+                                        zoomRangeStart - MEMORY_PADDING_L1,
+                                        zoomRangeEnd + MEMORY_PADDING_L1,
+                                    ]}
+                                    isZoomedIn={zoomedInViewMainMemory}
+                                    memoryZoomEnd={memorySizeL1}
+                                    configuration={BufferRenderConfiguration}
+                                    onBufferClick={onBufferClick}
+                                    markers={memoryRegionsMarkers}
+                                />
+                            </Fragment>
+                        ),
+                    )}
+                </>
+            )}
+
+            {showL1Small && (
+                <MemoryPlotRenderer
+                    title='Summarized L1 Small Report'
+                    className={classNames('l1-memory-renderer', {
+                        'empty-plot': l1SmallChartData.length === 0,
+                    })}
+                    isZoomedIn
+                    plotZoomRange={[
+                        l1SmallZoomStart - MEMORY_PADDING_L1_SMALL,
+                        l1SmallZoomEnd + MEMORY_PADDING_L1_SMALL,
+                    ]}
+                    chartDataList={[l1SmallChartData]}
+                    memoryZoomEnd={memorySizeL1} // Not used as we're always zoomed in
+                    configuration={L1SmallRenderConfiguration}
+                    onBufferClick={() => {}}
+                />
+            )}
+
+            {showCircularBuffer && cbChartDataByOperation.size > 0 && (
+                <>
+                    <h3>Device Operations</h3>
+                    <Switch
+                        label='Circular Buffers zoom'
+                        checked={zoomedInViewCBMemory}
+                        onChange={() => {
+                            setZoomedInViewCBMemory(!zoomedInViewCBMemory);
+                        }}
+                    />
+                    {[...cbChartDataByOperation.entries()].map(([{ name: deviceOperationName }, plotData], index) => (
+                        <Fragment key={`${deviceOperationName}-${index}`}>
+                            <h3 className='circular-buffers-plot-title'>
+                                <Icon
+                                    className='operation-icon'
+                                    size={13}
+                                    intent={Intent.SUCCESS}
+                                    icon={IconNames.CUBE_ADD}
+                                />{' '}
+                                <span>{deviceOperationName}</span>
+                            </h3>
+                            <MemoryPlotRenderer
+                                title=''
+                                className={classNames('l1-memory-renderer circular-buffers', {
+                                    'empty-plot': plotData.length === 0,
+                                })}
+                                chartDataList={[plotData]}
+                                plotZoomRange={[cbZoomStart - MEMORY_PADDING_CB, cbZoomEnd + MEMORY_PADDING_CB]}
+                                isZoomedIn={zoomedInViewCBMemory}
+                                memoryZoomEnd={memorySizeL1}
+                                configuration={CBRenderConfiguration}
+                                onBufferClick={onBufferClick}
+                                markers={[{ color: L1_SMALL_MARKER_COLOR, address: l1SmallMarker }]}
+                            />
+                        </Fragment>
+                    ))}
+                </>
+            )}
+
+            <div
+                className={classNames('legend', {
+                    'lengthy-legend': isLengthyLegend,
+                    [shadeClasses.top]: hasScrolledFromTop && isLengthyLegend,
+                    [shadeClasses.bottom]: !hasScrolledToBottom && isLengthyLegend,
+                })}
+                ref={scrollElementRef}
+                onScroll={handleUserScrolling}
+            >
+                {showMemoryRegions && l1StartMarker && l1StartMarker !== 0 && (
+                    <MemoryLegendElement
+                        chunk={{
+                            size: 0,
+                            address: l1StartMarker,
+                            markerType: MarkerType.L1_START,
+                        }}
+                        key='l1start-marker'
+                        memSize={memorySizeL1}
+                        selectedTensorAddress={null}
+                        operationDetails={operationDetails}
+                        onLegendClick={onLegendClick}
+                        userL1ZoomRange={userL1ZoomRange}
+                    />
+                )}
+                {showCircularBuffer &&
+                    memoryReportWithCB.map((chunk, index) => (
+                        <MemoryLegendElement
+                            chunk={chunk}
+                            key={`${chunk.address}-${index}`}
+                            memSize={memorySizeL1}
+                            selectedTensorAddress={selectedAddress}
+                            operationDetails={operationDetails}
+                            onLegendClick={onLegendClick}
+                            colorVariance={chunk.colorVariance}
+                            userL1ZoomRange={userL1ZoomRange}
+                        />
+                    ))}
+
+                {!showCircularBuffer &&
+                    memoryReport?.map((chunk, chunkIndex) => {
+                        const group = groupedMemoryReport.get(chunk.address);
+
+                        return Array.isArray(group) && group?.length > 1 ? (
+                            <MemoryLegendGroup
+                                group={group}
+                                key={`${chunk.address}`}
+                                memSize={memorySizeL1}
+                                selectedTensorAddress={selectedAddress}
+                                operationDetails={operationDetails}
+                                onLegendClick={onLegendClick}
+                                userL1ZoomRange={userL1ZoomRange}
+                            />
+                        ) : (
+                            <MemoryLegendElement
+                                chunk={chunk}
+                                key={`${chunk.address}-${chunkIndex}`}
+                                memSize={memorySizeL1}
+                                selectedTensorAddress={selectedAddress}
+                                operationDetails={operationDetails}
+                                onLegendClick={onLegendClick}
+                                userL1ZoomRange={userL1ZoomRange}
+                            />
+                        );
+                    })}
+                {showMemoryRegions && l1SmallMarker && l1SmallMarker !== Infinity && (
+                    <MemoryLegendElement
+                        chunk={{
+                            size: 0,
+                            address: l1SmallMarker,
+                            markerType: MarkerType.L1_SMALL,
+                        }}
+                        key='l1small-marker'
+                        memSize={memorySizeL1}
+                        selectedTensorAddress={null}
+                        operationDetails={operationDetails}
+                        onLegendClick={onLegendClick}
+                        userL1ZoomRange={userL1ZoomRange}
+                    />
+                )}
+            </div>
+        </>
+    );
+}
+
+export default L1Plots;

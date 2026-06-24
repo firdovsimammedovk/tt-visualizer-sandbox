@@ -1,0 +1,267 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import { ClusterCoordinates } from './ClusterModel';
+
+export interface CommonInfo {
+    version: string;
+    arch: string;
+    congestion_model_name: string;
+    cycles_per_timestep: number;
+    mcast_write_link_util: number;
+    device_name: string;
+    dram_bw_util: number;
+    link_demand: number;
+    link_util: number;
+    max_link_demand: number;
+    num_cols: number;
+    num_rows: number;
+}
+
+export interface NPE_KPI {
+    units: string;
+    label: string;
+    description: string;
+    decimals?: number;
+}
+
+export const NPE_KPI_METADATA = {
+    version: null,
+    arch: {
+        units: '',
+        label: 'Architecture',
+        description: 'Architecture used (e.g. wormhole_b0, blackhole)',
+    },
+    congestion_model_name: {
+        units: '',
+        label: 'Congestion Model',
+        description: 'Congestion model used in simulation to infer congestion (default: fast)',
+    },
+    cycles_per_timestep: {
+        units: ' cycles',
+        label: 'Device Cycles Per Timestep',
+        description: 'How many cycles each simulation timestep/frame spans',
+    },
+    device_name: {
+        units: '',
+        label: 'Device Name',
+        description: 'Device simulated (e.g. wormhole_b0, blackhole)',
+    },
+    dram_bw_util: {
+        units: '%',
+        label: 'DRAM Bandwidth Utilization',
+        description: '% of DRAM RW bandwidth used over entire operation runtime (100% is maximum)',
+    },
+    link_demand: {
+        units: '%',
+        label: 'NoC Link Demand',
+        description:
+            'Average demand for NoC links over entire runtime. Multiple packets requesting results in demand exceeding 100% for a given link. Demand be compared with link utilization to understand how localized congestion is.',
+    },
+    link_util: {
+        units: '%',
+        label: 'NoC Link Utilization',
+        description:
+            'Average utilization of NoC links over entire runtime. Link utilization saturates at 100% for every NoC link, no matter how much demand there is. Useful for understanding NoC toggle rate and overall efficiency of communication.',
+    },
+    max_link_demand: {
+        units: '%',
+        label: 'Max NoC Link Demand',
+        description: 'Maximum observed link demand over all timesteps. See link_demand for more details.',
+    },
+    mcast_write_link_util: {
+        units: '%',
+        label: 'Multicast Write Link Utilization',
+        description:
+            'Average utilization of NoC links for multicast write operations over entire runtime. Represents the portion of link bandwidth used specifically for multicast writes.',
+    },
+    num_cols: {
+        decimals: 0,
+        units: '',
+        label: 'Cols',
+        description: 'Number of core columns on the device.',
+    },
+    num_rows: {
+        decimals: 0,
+        units: '',
+        label: 'Rows',
+        description: 'Number of core rows on the device.',
+    },
+};
+
+type row = number;
+type col = number;
+type device_id = number;
+
+type NoCTransferId = number;
+
+export enum NoCType {
+    NOC0 = 'NOC0',
+    NOC1 = 'NOC1',
+}
+
+export enum EVENT_TYPE_FILTER {
+    ALL_EVENTS,
+    FABRIC_EVENTS,
+    LOCAL_EVENTS,
+}
+
+export enum NoCID {
+    NOC1_NORTH = 'NOC1_NORTH',
+    NOC0_SOUTH = 'NOC0_SOUTH',
+    NOC0_EAST = 'NOC0_EAST',
+    NOC1_WEST = 'NOC1_WEST',
+    NOC0_IN = 'NOC0_IN',
+    NOC0_OUT = 'NOC0_OUT',
+    NOC1_IN = 'NOC1_IN',
+    NOC1_OUT = 'NOC1_OUT',
+}
+
+export enum FABRIC_EVENT_SCOPE_OPTIONS {
+    BOTH,
+    FABRIC,
+    LOCAL,
+}
+
+export const FabricEventScopeColors: Record<FABRIC_EVENT_SCOPE_OPTIONS, string> = {
+    [FABRIC_EVENT_SCOPE_OPTIONS.BOTH]: 'rgb(225,0,0)',
+    [FABRIC_EVENT_SCOPE_OPTIONS.FABRIC]: 'rgb(255,234,0)',
+    [FABRIC_EVENT_SCOPE_OPTIONS.LOCAL]: 'rgb(204,0,204)',
+};
+
+export type LinkUtilization = [
+    device_id: number,
+    row: number,
+    col: number,
+    noc_id: NoCID,
+    demand: number, // percentage - it can exceed 100% if there is congestion
+    fabric_event_scope: FABRIC_EVENT_SCOPE_OPTIONS | undefined,
+];
+export type NoCLink = [device_id: number, row: number, col: number, noc_id: NoCID];
+export type NPE_COORDINATES = [device_id: number, row: number, col: number];
+
+export interface SelectedNode {
+    index: number;
+    coords: NPE_COORDINATES;
+}
+
+export interface NoCFlowBase {
+    id: NoCTransferId | null;
+    src: [device_id, row, col];
+    dst: [[device_id, row, col]];
+}
+
+export interface NoCRoute extends NoCFlowBase {
+    device_id: number;
+    total_bytes: number;
+    noc_event_type: '';
+    noc_type: NoCType;
+    injection_rate: number;
+    start_cycle: number;
+    end_cycle: number;
+    links: NoCLink[];
+}
+
+export interface NoCTransfer extends NoCFlowBase {
+    id: NoCTransferId;
+    total_bytes: number;
+    noc_event_type: '';
+    fabric_event_type: boolean;
+    start_cycle: number;
+    end_cycle: number;
+    route: NoCRoute[];
+    zones?: string;
+}
+
+export interface TimestepData {
+    start_cycle: number;
+    end_cycle: number;
+    active_transfers: NoCTransferId[];
+    link_demand: LinkUtilization[];
+    avg_link_demand: number; // percentage
+    avg_link_util: number; // percentage
+    mcast_write_link_util: number;
+    noc: {
+        [K in NoCType]: {
+            avg_link_demand: number; //  percentage
+            avg_link_util: number; // percentage
+        };
+    };
+}
+
+export interface NPEData {
+    common_info: CommonInfo;
+    noc_transfers: NoCTransfer[];
+    timestep_data: TimestepData[];
+    zones?: NPERootZone[];
+    chips: {
+        [key: device_id]: ClusterCoordinates;
+    };
+}
+
+export interface NPERootZone {
+    zones: NPEZone[];
+    proc: KERNEL_PROCESS;
+    core: NPE_COORDINATES;
+}
+
+export interface NPERootZoneUXInfo extends NPERootZone {
+    expandedState: boolean;
+}
+
+export interface NPEZone {
+    id: string;
+    zones: NPEZone[];
+    start: number;
+    end: number;
+    depth: number;
+}
+
+export interface ZoneDrawingInfo {
+    depth: number;
+    start: number;
+    end: number;
+    id: string;
+    color?: string;
+}
+
+export enum NPE_COORDINATE_INDEX {
+    CHIP_ID,
+    Y,
+    X,
+}
+
+export enum NPE_LINK {
+    CHIP_ID = NPE_COORDINATE_INDEX.CHIP_ID,
+    Y = NPE_COORDINATE_INDEX.Y,
+    X = NPE_COORDINATE_INDEX.X,
+    NOC_ID,
+    DEMAND,
+    FABRIC_EVENT_SCOPE,
+}
+
+export interface NPEManifestEntry {
+    global_call_count: number;
+    file: string;
+}
+
+export enum KERNEL_PROCESS {
+    BRISC = 'BRISC',
+    TRISC_0 = 'TRISC_0',
+    TRISC_1 = 'TRISC_1',
+    NCRISC = 'NCRISC',
+    ERISC = 'ERISC',
+    CORE_AGG = 'CORE_AGG',
+}
+
+export const KERNEL_COLORS: Record<KERNEL_PROCESS, string> = {
+    [KERNEL_PROCESS.BRISC]: `rgba(255, 99, 71, 1)`,
+    [KERNEL_PROCESS.TRISC_0]: `rgba(34, 139, 34, 1)`,
+    [KERNEL_PROCESS.TRISC_1]: `rgba(255, 215, 0, 1)`,
+    [KERNEL_PROCESS.NCRISC]: `rgba(30, 144, 255, 1)`,
+    [KERNEL_PROCESS.ERISC]: `rgba(186, 85, 211, 1)`,
+    [KERNEL_PROCESS.CORE_AGG]: `rgba(255, 69, 0, 1)`,
+};
+
+export const getKernelColor = (proc: KERNEL_PROCESS): string => KERNEL_COLORS[proc] || 'rgba(255, 255,255, 1)';

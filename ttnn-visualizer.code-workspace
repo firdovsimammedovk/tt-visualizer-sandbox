@@ -1,0 +1,55 @@
+{
+    "folders": [
+        {
+            "path": ".",
+        },
+    ],
+    "settings": {
+        "css.validate": false,
+        "less.validate": false,
+        "scss.validate": false,
+        "editor.formatOnSave": true,
+        "eslint.validate": [
+            "typescript",
+            "typescriptreact"
+        ],
+        "stylelint.validate": [
+            "css",
+            "scss"
+        ],
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+            "source.fixAll.eslint": "always",
+            "source.fixAll.stylelint": "always",
+        },
+        "[python]": {
+            "editor.codeActionsOnSave": {
+                "source.organizeImports": "explicit"
+            },
+            "editor.defaultFormatter": "ms-python.black-formatter",
+            "editor.formatOnSave": true,
+        },
+        "isort.args": [
+            "--profile",
+            "black"
+        ],
+        "[json]": {
+            "editor.defaultFormatter": "vscode.json-language-features",
+        },
+        "[jsonc]": {
+            "editor.defaultFormatter": "vscode.json-language-features",
+        },
+    },
+    "extensions": {
+        "recommendations": [
+            "dbaeumer.vscode-eslint",
+            "esbenp.prettier-vscode",
+            "Gruntfuggly.todo-tree",
+            "ms-python.black-formatter",
+            "ms-python.isort",
+            "ms-python.python",
+            "streetsidesoftware.code-spell-checker",
+            "stylelint.vscode-stylelint"
+        ],
+    },
+}

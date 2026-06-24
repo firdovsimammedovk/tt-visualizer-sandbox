@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use '../definitions/colours' as *;
+
+.buffer-summary-filter {
+    margin-bottom: 20px;
+}
+
+.buffer-summary-table {
+    display: flex;
+    flex-direction: column;
+    height: 600px;
+    width: 100%;
+    max-width: 1200px;
+    overflow-y: auto;
+
+    // Allows scrollbar to be visible from the top and not hidden by the table header
+    .bp6-table-quadrant.bp6-table-quadrant-top {
+        background-color: transparent;
+    }
+
+    .aside-container {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+    }
+
+    .result-count {
+        text-align: right;
+    }
+
+    .sortable-table-header {
+        cursor: pointer;
+        position: absolute;
+
+        // this is a little hackish, maybe find a more elegant solution
+        width: 30px;
+        height: 30px;
+        top: -30px;
+        right: 0;
+
+        &:hover,
+        &:focus {
+            .sort-icon {
+                display: block;
+                opacity: 0.5;
+            }
+        }
+
+        .sort-icon {
+            opacity: 0.2;
+
+            &.is-active {
+                display: block;
+                opacity: 1;
+            }
+        }
+    }
+
+    .cell-header {
+        .bp6-table-truncated-text {
+            padding-right: 15px;
+        }
+    }
+
+    .operation-cell {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+
+        .memory-color-block {
+            width: 12px;
+            height: 12px;
+            margin-bottom: 1px; // Offset needed because align-items center doesn't quite center it in the table cell
+        }
+    }
+
+    .column-filter {
+        margin: 0 5px;
+        height: 24px;
+        line-height: 24px;
+        position: relative;
+        bottom: 5px;
+    }
+
+    .row-is-active {
+        background-color: $tt-bg-highlight;
+    }
+}

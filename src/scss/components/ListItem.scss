@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use 'styles/definitions/colours' as *;
+
+.list-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+
+    .highlighted-text {
+        color: $tt-white;
+        font-size: 20px;
+
+        mark {
+            background-color: $tt-yellow;
+        }
+    }
+
+    &.operation-icon {
+        .bp6-icon:not([class*='bp6-intent-']).styled-icon {
+            color: $tt-operations;
+        }
+    }
+
+    &.tensor-icon {
+        .bp6-icon:not([class*='bp6-intent-']).styled-icon {
+            color: $tt-tensors;
+        }
+    }
+
+    &.error-icon {
+        .bp6-icon:not([class*='bp6-intent-']).styled-icon {
+            color: $tt-red-accent;
+        }
+    }
+}

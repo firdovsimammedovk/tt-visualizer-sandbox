@@ -1,0 +1,236 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use 'sass:color';
+@use './definitions/colours' as *;
+@use './definitions/variables' as variables;
+
+.monospace {
+    font-family: variables.$monospace-font;
+}
+
+.em {
+    font-style: italic;
+}
+
+.page-title {
+    font-size: 24px;
+    margin-top: 0;
+}
+
+// Using !important to override some 3rd party CSS
+.no-toast-animation {
+    /* stylelint-disable-next-line declaration-no-important */
+    display: none !important;
+}
+
+// Generic table styles
+$row-background: $tt-grey-2;
+
+.ttnn-table {
+    border-collapse: collapse;
+
+    caption {
+        text-align: left;
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+
+    &.two-tone-rows {
+        tr {
+            background-color: color.adjust($row-background, $lightness: 2%);
+
+            &:nth-of-type(odd) {
+                background-color: color.adjust($row-background, $lightness: 8%);
+            }
+        }
+    }
+
+    &.alt-two-tone-rows {
+        tr {
+            background-color: color.adjust($row-background, $lightness: 12%);
+
+            &:nth-of-type(odd) {
+                background-color: color.adjust($row-background, $lightness: 4%);
+            }
+        }
+    }
+
+    th {
+        font-weight: 700;
+    }
+
+    th,
+    td {
+        padding: 6px 12px;
+        vertical-align: top;
+        text-align: left;
+
+        // Stops lengthy config values breaking the layout - https://github.com/tenstorrent/ttnn-visualizer/issues/809
+        // Having this as the default behaviour because all our tables currently require this
+        // and use vertical headings (first column) instead of horizontal headings (first row)
+        word-break: break-word;
+
+        &:first-child {
+            min-width: 160px; // Stops cells from being too narrow
+            word-break: normal;
+            width: 160px; // Keeps first column width consistent when other columns have a lot of content
+        }
+    }
+}
+
+.memory-color-block {
+    width: 15px;
+    height: 15px;
+    display: inline-block;
+
+    &.empty-tensor {
+        background: repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 5px,
+            $tt-red-accent 5px,
+            $tt-red-accent 7px
+        );
+    }
+}
+
+.graph-tree-loader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 80vh;
+}
+
+.buffers-plot-title {
+    margin-top: -18px;
+}
+
+// Shared memory plots styles used in Operation Details
+.dram-memory-renderer,
+.l1-memory-renderer {
+    .memory-plot {
+        width: 100%;
+        margin-right: 10px;
+
+        &.js-plotly-plot {
+            .main-svg:last-child {
+                overflow: visible;
+            }
+
+            .xaxislayer-above {
+                // Fixes the issue where the first x-axis tick is not visible (thanks Plotly)
+                .xtick:first-child text {
+                    /* stylelint-disable-next-line declaration-no-important */
+                    opacity: 1 !important; // Need this to overwrite inline style
+                    text-anchor: start;
+                }
+            }
+        }
+    }
+
+    &.circular-buffers {
+        margin-bottom: 5px;
+    }
+
+    &.interm-buffers {
+        margin-top: -40px;
+        margin-bottom: 5px;
+    }
+
+    &.identical-plot {
+        .memory-plot {
+            opacity: 0.5;
+        }
+    }
+
+    &.empty-plot {
+        opacity: 0.4;
+    }
+
+    .plot-title {
+        font-weight: 500;
+        margin-bottom: -14px;
+        margin-top: 0;
+    }
+
+    &.zoom-reference {
+        margin-bottom: -60px;
+        margin-top: -20px;
+        padding-left: 10px;
+        padding-right: 10px;
+
+        &.disabled {
+            opacity: 0.4;
+            filter: brightness(0.2);
+        }
+
+        // background-color: #00e0e0;
+    }
+}
+
+// Element to trigger onClick to dismiss focussed buffer
+.outside-click {
+    background-color: rgb(255 0 0 / 47%);
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    z-index: variables.$z-index-1-base;
+}
+
+.bp6-tag {
+    &.memory-tag {
+        background-color: $tt-grey-6;
+
+        &.tag-l1 {
+            background-color: $tt-yellow-accent;
+        }
+
+        &.tag-dram {
+            background-color: $tt-teal-shade;
+        }
+
+        &.tag-l1-small {
+            color: $tt-grey-2;
+            background-color: $tt-yellow-tint-1;
+        }
+    }
+}
+
+// Assumes the right icon will be the last child of the element (like in the Button component)
+.right-icon-small {
+    > span {
+        &:last-child {
+            > svg {
+                width: 12px;
+                height: 12px;
+            }
+        }
+    }
+}
+
+// Padding to offest content from the FooterInfobar
+.data-padding {
+    padding-bottom: 20px;
+}
+
+.form-group {
+    .label {
+        margin: 0;
+    }
+}
+
+.delete-folder-backdrop {
+    background-color: rgb(0 0 0 / 8%);
+}
+
+.color-square {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+}

@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use 'definitions/colours' as *;
+@use 'definitions/variables' as variables;
+
+:root {
+    color-scheme: light dark;
+    font-synthesis: none;
+    text-rendering: optimizelegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    --graph-input-node: #a8e6a3;
+    --graph-output-node: #f6bc42;
+    --graph-input-edge: #6bcf8e;
+    --graph-output-edge: #f6bc42;
+    --graph-normal: #e0e0e0;
+    --graph-focused-node: #f6bc42;
+}
+
+::-webkit-scrollbar-track {
+    background-color: transparent;
+    pointer-events: none;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: variables.$base-font;
+    height: 100vh;
+    color: $tt-white;
+    background-color: $tt-background;
+}
+
+main {
+    padding: 15px;
+    padding-bottom: 30px; // Offsets the fixed current data bar
+}
+
+button {
+    border: 0;
+    background-color: transparent;
+    cursor: pointer;
+    opacity: 0.9;
+    padding: 0;
+}
+
+hr {
+    border: none;
+    border-bottom: 1px solid $tt-grey-5;
+    margin: 0;
+}
+
+a {
+    text-decoration: underline;
+
+    &:focus {
+        text-decoration: none;
+        outline: none;
+    }
+
+    &:hover {
+        text-decoration: none;
+    }
+}

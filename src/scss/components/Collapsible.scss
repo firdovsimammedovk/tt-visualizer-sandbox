@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use '../definitions/colours' as *;
+@use '../mixins/perfReportColours' as perf;
+
+.collapsible-component {
+    .collapsible-label-wrap,
+    > [type='button'] {
+        padding: 0;
+        margin-bottom: 5px;
+        max-width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+
+        &.bp6-button {
+            padding: 0;
+        }
+
+        &:hover {
+            transform: none;
+            color: $tt-white;
+        }
+
+        .collapsible-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+    }
+
+    .collapsible-controls {
+        .collapsible-button {
+            background-color: transparent;
+        }
+    }
+
+    &.empty-collapsible {
+        .collapsible-controls {
+            [type='button'].collapsible-button {
+                cursor: default;
+
+                &:hover {
+                    background: none;
+                }
+            }
+
+            .bp6-icon.bp6-icon-caret-up,
+            .bp6-icon.bp6-icon-caret-down {
+                display: none;
+            }
+        }
+    }
+
+    .arguments-wrapper {
+        padding-top: 16px;
+        padding-bottom: 16px;
+        padding-left: 38px;
+    }
+
+    .perf-data {
+        display: grid;
+        grid-template-columns: repeat(2, max-content);
+        gap: 5px;
+        margin-bottom: 10px;
+
+        &:empty {
+            margin-bottom: 0;
+        }
+
+        @include perf.perf-report-colours;
+    }
+}

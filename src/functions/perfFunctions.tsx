@@ -1,0 +1,592 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import { JSX } from 'react';
+import classNames from 'classnames';
+import { Classes, Icon, Intent, Tooltip } from '@blueprintjs/core';
+import { IconNames } from '@blueprintjs/icons';
+import { Link } from 'react-router-dom';
+import { BoundType, ColumnDefinition, ColumnKeys, TypedPerfTableRow } from '../definitions/PerfTable';
+import { OperationDescription } from '../model/APIData';
+import { formatMemorySize, formatPercentage, formatSize, toSecondsPretty } from './math';
+import ROUTES from '../definitions/Routes';
+import HighlightedText from '../components/HighlightedText';
+import { HIGH_DISPATCH_THRESHOLD_MS, OpType } from '../definitions/Performance';
+import { TypedStackedPerfRow } from '../definitions/StackedPerfTable';
+import { NormalisedPerfData } from './normalisePerformanceData';
+import MemoryTag from '../components/MemoryTag';
+import { BufferType, BufferTypeLabel } from '../model/BufferType';
+import L1FullnessBar from '../components/performance/L1FullnessBar';
+import { CellColour } from '../definitions/CellColour';
+
+export interface Signpost {
+    id: number;
+    op_code: string;
+}
+
+const OPERATION_COLOURS: { [key: string]: CellColour } = {
+    '(torch)': CellColour.Red,
+    Matmul: CellColour.Magenta,
+    LayerNorm: CellColour.Cyan,
+    AllGather: CellColour.Cyan,
+    AllReduce: CellColour.Cyan,
+    ScaledDotProductAttentionDecode: CellColour.Blue,
+    ScaledDotProductAttentionGQADecode: CellColour.Blue,
+    NlpCreateHeadsDeviceOperation: CellColour.Blue,
+    NLPConcatHeadsDecodeDeviceOperation: CellColour.Blue,
+    UpdateCache: CellColour.Blue,
+    OptimizedConvNew: CellColour.Orange, // Deprecated - Conv2d is the new name for this operation
+    Conv2d: CellColour.Orange,
+};
+
+const DEFAULT_COLOUR = CellColour.White;
+const FALLBACK_COLOUR = CellColour.Grey;
+const WARNING_COLOUR = CellColour.Yellow;
+
+const MIN_PERCENTAGE = 0.5;
+
+// https://github.com/tenstorrent/ttnn-visualizer/issues/1267
+export const formatCell = (
+    row: TypedPerfTableRow,
+    column: ColumnDefinition,
+    operations?: OperationDescription[],
+    highlight?: string | null,
+    isFirstOfOpRun: boolean = true,
+): JSX.Element | string => {
+    const { key, unit, decimals } = column;
+    const isSignpost = row.op_type === OpType.SIGNPOST;
+    const isHost = isHostOp(row.bound);
+    const value = row[key];
+    let formatted: string | boolean | string[];
+
+    if (value === null || value === '' || Number.isNaN(value)) {
+        return '';
+    }
+
+    // L1 pressure values reflect a TTNN-op snapshot; suppress repeats inside the same op group.
+    if (!isFirstOfOpRun && key === ColumnKeys.L1Fullness) {
+        return '';
+    }
+
+    // Signposts only have a few meaningful columns
+    if (isSignpost) {
+        if (key !== ColumnKeys.Id && key !== ColumnKeys.OpCode) {
+            return '';
+        }
+    }
+
+    // Host Ops only have a few meaningful columns
+    if (isHost) {
+        if (key !== ColumnKeys.Id && key !== ColumnKeys.OpCode && key !== ColumnKeys.Bound) {
+            return '';
+        }
+    }
+
+    if (key === ColumnKeys.BufferType) {
+        return <MemoryTag memory={BufferTypeLabel[value as BufferType]} />;
+    }
+
+    if (key === ColumnKeys.HighDispatch) {
+        const tooltipMessage = `Op with > ${HIGH_DISPATCH_THRESHOLD_MS} µs dispatch latency`;
+
+        return row?.[ColumnKeys.DeviceTime] !== null && row?.[ColumnKeys.DeviceTime] > HIGH_DISPATCH_THRESHOLD_MS ? (
+            <Tooltip content={tooltipMessage}>
+                <Icon
+                    className={WARNING_COLOUR}
+                    icon={IconNames.WARNING_SIGN}
+                    title={tooltipMessage}
+                />
+            </Tooltip>
+        ) : (
+            ''
+        );
+    }
+
+    if (key === ColumnKeys.OP && operations) {
+        return (
+            <Tooltip
+                content={
+                    <div className='op-tooltip'>
+                        {value} {getOperationDetails(operations, value as number)}
+                    </div>
+                }
+                usePortal={false}
+            >
+                <Link to={`${ROUTES.OPERATIONS}/${value}`}>{value}</Link>
+            </Tooltip>
+        );
+    }
+
+    if (key === ColumnKeys.Hash) {
+        const hashText = value?.toString() || '';
+
+        return hashText || '';
+    }
+
+    if (key === ColumnKeys.CacheHit) {
+        if (typeof value !== 'boolean') {
+            return '';
+        }
+
+        // Only show icon if this is not the first occurrence of the hash
+        if (row.isFirstHashOccurrence) {
+            return '';
+        }
+
+        const tooltipMessage =
+            value === true ? (
+                <>
+                    Operation result reused from cache
+                    <br />
+                    <strong>Hash:</strong> {row[ColumnKeys.Hash]}
+                </>
+            ) : (
+                <>
+                    Operation result was recomputed
+                    <br />
+                    <strong>Hash:</strong> {row[ColumnKeys.Hash]}
+                </>
+            );
+
+        return value === true ? (
+            <Tooltip content={tooltipMessage}>
+                <Icon
+                    intent={Intent.SUCCESS}
+                    icon={IconNames.TICK}
+                />
+            </Tooltip>
+        ) : (
+            <Tooltip content={tooltipMessage}>
+                <Icon
+                    intent={Intent.WARNING}
+                    icon={IconNames.WARNING_SIGN}
+                />
+            </Tooltip>
+        );
+    }
+
+    if (key === ColumnKeys.L1Fullness) {
+        if (typeof value !== 'number') {
+            return '';
+        }
+
+        const largestFreeBytes = row.l1_largest_free;
+        const freeSegments = row.l1_free_segments;
+        const tooltipBody = (
+            <>
+                <L1FullnessBar
+                    fullnessPercent={value}
+                    largestFreePercent={row.l1_largest_free_percent}
+                />
+
+                <div className='l1-fullness-attributes'>
+                    <strong>Free segments:</strong> {freeSegments ?? 'n/a'}
+                    <br />
+                    <strong>Largest free segment:</strong>{' '}
+                    {largestFreeBytes != null ? formatMemorySize(largestFreeBytes, 2) : 'n/a'}
+                    <br />
+                    <em>Excludes circular buffers</em>
+                </div>
+            </>
+        );
+
+        const formattedPercent = formatPercentage(value, decimals);
+
+        return (
+            <Tooltip
+                content={tooltipBody}
+                usePortal={false}
+            >
+                <span
+                    className={classNames(Classes.TOOLTIP_INDICATOR)}
+                    style={{ whiteSpace: 'nowrap' }}
+                >
+                    {highlight ? (
+                        <HighlightedText
+                            text={formattedPercent}
+                            filter={highlight}
+                        />
+                    ) : (
+                        formattedPercent
+                    )}
+                </span>
+            </Tooltip>
+        );
+    }
+
+    if (typeof value === 'number' && key !== ColumnKeys.Id) {
+        formatted = formatSize(value, decimals);
+    } else {
+        formatted = value?.toString() || '';
+    }
+
+    if (unit) {
+        if (unit === '%') {
+            formatted = formatPercentage(Number(value), decimals);
+        } else {
+            formatted += ` ${unit}`;
+        }
+    }
+
+    return getCellMarkup(formatted, getCellColour(row, key), highlight);
+};
+
+export const getCellMarkup = (text: string, colour?: CellColour, highlight?: string | null) => {
+    if (!text) {
+        return '';
+    }
+
+    if (highlight) {
+        return (
+            <HighlightedText
+                className={colour}
+                text={text}
+                filter={highlight || ''}
+            />
+        );
+    }
+
+    if (colour) {
+        return <span className={colour}>{text}</span>;
+    }
+
+    return <span>{text}</span>;
+};
+
+export const getCellColour = (row: TypedPerfTableRow, key: ColumnKeys): CellColour => {
+    const keyValue = row[key];
+    const percentage = row.total_percent;
+
+    if (row.op_type === OpType.DEVICE_OP && percentage != null && percentage < MIN_PERCENTAGE) {
+        return FALLBACK_COLOUR;
+    }
+
+    if (row.op_type === OpType.SIGNPOST) {
+        return DEFAULT_COLOUR;
+    }
+
+    if (key === ColumnKeys.Id || key === ColumnKeys.TotalPercent || key === ColumnKeys.DeviceTime) {
+        return DEFAULT_COLOUR;
+    }
+
+    if (key === ColumnKeys.Bound) {
+        if (keyValue === BoundType.HOST) {
+            return CellColour.Green;
+        }
+
+        if (keyValue === BoundType.FLOP) {
+            return CellColour.Green;
+        }
+
+        if (keyValue === BoundType.SLOW) {
+            return CellColour.Yellow;
+        }
+
+        if (keyValue === BoundType.DRAM) {
+            return CellColour.Green;
+        }
+    }
+
+    if (
+        key === ColumnKeys.Dram ||
+        key === ColumnKeys.DramPercent ||
+        key === ColumnKeys.Flops ||
+        key === ColumnKeys.FlopsPercent
+    ) {
+        if (row.bound === BoundType.DRAM) {
+            if (key === ColumnKeys.Dram || key === ColumnKeys.DramPercent) {
+                return CellColour.Green;
+            }
+        }
+
+        if (row.bound === BoundType.FLOP) {
+            if (key === ColumnKeys.Flops || key === ColumnKeys.FlopsPercent) {
+                return CellColour.Green;
+            }
+        }
+
+        if (row.bound === BoundType.HOST) {
+            return CellColour.Red;
+        }
+
+        const dramP = row.dram_percent;
+        const flopsP = row.flops_percent;
+
+        if (row.bound === BoundType.SLOW) {
+            if (dramP != null && flopsP != null) {
+                if (dramP > flopsP) {
+                    if (key === ColumnKeys.Dram || key === ColumnKeys.DramPercent) {
+                        return CellColour.Yellow;
+                    }
+                } else if (key === ColumnKeys.Flops || key === ColumnKeys.FlopsPercent) {
+                    return CellColour.Yellow;
+                }
+            }
+        }
+
+        return DEFAULT_COLOUR;
+    }
+
+    if (key === ColumnKeys.Cores && keyValue != null) {
+        return getCoreColour(keyValue);
+    }
+
+    if (key === ColumnKeys.OpCode) {
+        const match = Object.keys(OPERATION_COLOURS).find((opCodeKey) => row.raw_op_code.includes(opCodeKey));
+
+        return match ? OPERATION_COLOURS[match] : DEFAULT_COLOUR;
+    }
+
+    if (key === ColumnKeys.Hash) {
+        // Highlight hash in red if there's a cache miss
+        if (row.cache_hit === false) {
+            return CellColour.Red;
+        }
+    }
+
+    if (key === ColumnKeys.MathFidelity && typeof keyValue === 'string') {
+        const parts = keyValue.split(' ');
+        const mathFidelity = parts[0] as MathFidelity;
+        const input0Datatype = row.input_0_datatype || '';
+        const input1Datatype = row.input_1_datatype || '';
+        const outputDatatype = row.output_datatype || '';
+        const [fidelityEval] = evaluateFidelity(input0Datatype, input1Datatype, outputDatatype, mathFidelity);
+
+        if (fidelityEval === 'sufficient') {
+            return CellColour.Green;
+        }
+
+        if (fidelityEval === 'too_high') {
+            return CellColour.Red;
+        }
+
+        if (fidelityEval === 'too_low') {
+            return CellColour.Cyan;
+        }
+
+        return DEFAULT_COLOUR;
+    }
+
+    if (key === ColumnKeys.OpToOpGap) {
+        return typeof keyValue === 'number' ? getOpToOpGapColour(keyValue) : FALLBACK_COLOUR;
+    }
+
+    // Shouldn't get to this point but need to return something
+    return FALLBACK_COLOUR;
+};
+
+export const getCoreColour = (value: string | string[] | boolean | number): CellColour => {
+    const cores = (typeof value === 'string' ? parseInt(value, 10) : value) as number;
+
+    if (cores != null) {
+        if (cores < 10) {
+            return CellColour.Red;
+        }
+
+        if (cores === 64) {
+            return CellColour.Green;
+        }
+    }
+
+    return DEFAULT_COLOUR;
+};
+
+export const getOpToOpGapColour = (value: number): CellColour => {
+    return value > HIGH_DISPATCH_THRESHOLD_MS ? CellColour.Red : FALLBACK_COLOUR;
+};
+
+export const calcHighDispatchOps = (rows: TypedPerfTableRow[]) => {
+    const highDispatchOps = rows
+        .map((opData: TypedPerfTableRow, index: number): [number, TypedPerfTableRow] => [index + 1, opData])
+        .filter(([_, opData]) => {
+            const val = opData.op_to_op_gap;
+            return val !== null && val !== undefined && typeof val === 'number' && val > HIGH_DISPATCH_THRESHOLD_MS;
+        });
+
+    if (highDispatchOps.length === 0) {
+        return null;
+    }
+
+    // Compute the max dispatch overhead
+    const maxDispatchOverhead = highDispatchOps.reduce((acc, [_, opData]) => {
+        const val = opData.op_to_op_gap || 0;
+
+        return acc + (val - HIGH_DISPATCH_THRESHOLD_MS);
+    }, 0);
+
+    // Compute total_duration as sum of device times + Op-to-Op Gaps
+    const totalDeviceTime = rows.reduce((acc, r) => {
+        const val = r.device_time || 0;
+
+        return acc + (typeof val === 'number' ? val : 0);
+    }, 0);
+
+    const totalDispatchTime = rows.reduce((acc, r) => {
+        const val = r.op_to_op_gap;
+
+        return acc + (typeof val === 'number' ? val : 0);
+    }, 0);
+
+    const totalDuration = totalDeviceTime + totalDispatchTime;
+    const percentageSaved = (maxDispatchOverhead / totalDuration) * 100;
+
+    return (
+        <div className='high-dispatch-advice'>
+            <p>
+                Marked ops have &gt; {HIGH_DISPATCH_THRESHOLD_MS} µs dispatch latency. Running with tracing could save{' '}
+                {formatSize(maxDispatchOverhead, 0)} µs {toSecondsPretty(maxDispatchOverhead)} (
+                {formatPercentage(percentageSaved, 1)} of overall time).
+            </p>
+            <p>Alternatively, try moving runtime args in the kernels to compile-time args.</p>
+        </div>
+    );
+};
+
+export enum MathFidelity {
+    HiFi4 = 'HiFi4',
+    HiFi2 = 'HiFi2',
+    LoFi = 'LoFi',
+}
+
+export function evaluateFidelity(
+    input0Datatype: string,
+    input1Datatype: string,
+    outputDatatype: string,
+    mathFidelity: MathFidelity | '',
+): [string, string | null] {
+    const mantissaBits: Record<string, number> = {
+        FLOAT32: 23,
+        BFLOAT16: 8,
+        BFLOAT8_B: 7,
+        BFLOAT4_B: 3,
+    };
+
+    const in0Bits = mantissaBits[input0Datatype];
+    const in1Bits = mantissaBits[input1Datatype];
+    const outBits = mantissaBits[outputDatatype];
+
+    // I note that we're not using the second part of the returned array, only the first part.
+    if (in0Bits === 8 && outBits >= 7) {
+        if (mathFidelity === MathFidelity.HiFi4) {
+            return ['sufficient', 'HiFi2 may also work and has 2x the throughput of HiFi4'];
+        }
+
+        if (mathFidelity === MathFidelity.HiFi2) {
+            return ['too_low', 'If your matmuls are not FLOP-bound use HiFi4 with BF16 activations for full accuracy'];
+        }
+
+        if (mathFidelity === MathFidelity.LoFi) {
+            return ['too_low', 'Use HiFi2 or HiFi4 with BF16 activations for improved accuracy'];
+        }
+    } else if (in0Bits === 8 && outBits === 3) {
+        if (mathFidelity === MathFidelity.HiFi4) {
+            return ['too_high', 'HiFi2 is very likely to work for BFP8 output and has 2x the throughput of HiFi4'];
+        }
+
+        if (mathFidelity === MathFidelity.HiFi2) {
+            return ['sufficient', 'LoFi might also be sufficient with BFP4 output and has almost 2x the throughput'];
+        }
+
+        if (mathFidelity === MathFidelity.LoFi) {
+            return ['too_low', 'HiFi2 may give better accuracy for large matmuls with many intermediate accumulations'];
+        }
+    } else if (in1Bits >= 7 && outBits >= 7) {
+        if (mathFidelity === MathFidelity.HiFi4) {
+            return ['too_high', 'HiFi2 is sufficient for BFP8 multiplication and faster'];
+        }
+
+        if (mathFidelity === MathFidelity.HiFi2) {
+            return ['sufficient', null];
+        }
+
+        if (mathFidelity === MathFidelity.LoFi) {
+            return ['too_low', 'HiFi2 is recommended for accuracy; LoFi discards low bits of weights'];
+        }
+    } else if (in1Bits >= 7 && outBits === 3) {
+        if (mathFidelity === MathFidelity.HiFi4) {
+            return ['too_high', 'HiFi2 is sufficient and 2x throughput'];
+        }
+
+        if (mathFidelity === MathFidelity.HiFi2) {
+            return ['sufficient', 'LoFi might also be sufficient (BFP4 output) and has almost 2x throughput'];
+        }
+
+        if (mathFidelity === MathFidelity.LoFi) {
+            return ['too_low', 'HiFi2 may give slightly better accuracy for large matmuls'];
+        }
+    } else if (in1Bits === 3) {
+        if (mathFidelity === MathFidelity.LoFi) {
+            return ['sufficient', null];
+        }
+        return ['too_high', 'LoFi is sufficient with BFP4 weights'];
+    }
+
+    return ['unknown', `Using ${mathFidelity} for ${input0Datatype}/${input1Datatype} => ${outputDatatype}`];
+}
+
+export function getOperationDetails(operations: OperationDescription[], id: number) {
+    const matchingOp = operations?.find((op) => op.id === id);
+
+    return matchingOp ? `${matchingOp.name} (${matchingOp.operationFileIdentifier})` : '';
+}
+
+export function getAxisUpperRange(arrays: Array<unknown[]>): number {
+    // Adds + 1 to avoid cutting off the last plotted element in some cases and to create some space on the right side of the chart data
+    return Math.max(...arrays.map((arr) => arr.length), 0) + 1;
+}
+
+export const isHostOp = (bound: BoundType | null) => bound === BoundType.HOST;
+
+export const getStandardViewCounts = (
+    data: TypedPerfTableRow[],
+    filteredData: TypedPerfTableRow[],
+    isInitialTab: boolean,
+    processedComparisonRows: TypedPerfTableRow[][],
+    filteredComparisonRows: TypedPerfTableRow[],
+    normalisedData: NormalisedPerfData | null,
+    comparisonIndex: number,
+    comparisonMaxLength?: number,
+) => {
+    const filtered = isInitialTab ? filteredData.length : filteredComparisonRows.length;
+    let total: number;
+    let delta = 0;
+
+    if (normalisedData) {
+        total = normalisedData.data[0]?.length || 0;
+    } else {
+        total = isInitialTab ? data?.length || 0 : comparisonMaxLength || 0;
+    }
+
+    if (normalisedData) {
+        if (isInitialTab) {
+            delta = data.length - (normalisedData.data?.[0]?.length || 0);
+        } else if (processedComparisonRows?.[comparisonIndex] && normalisedData.data?.[comparisonIndex + 1]) {
+            delta = processedComparisonRows[comparisonIndex].length - normalisedData.data[comparisonIndex + 1].length;
+        }
+    }
+
+    return { filtered, total, delta };
+};
+
+export const getStackedViewCounts = (
+    data: TypedStackedPerfRow[],
+    filteredData: TypedStackedPerfRow[],
+    processedComparisonStackedRows: TypedStackedPerfRow[][],
+    filteredComparisonRows: TypedStackedPerfRow[],
+    comparisonIndex: number,
+    isInitialTab: boolean,
+) => {
+    const filtered = isInitialTab ? filteredData.length : filteredComparisonRows.length;
+    let total = data?.length;
+
+    if (comparisonIndex > -1) {
+        total = processedComparisonStackedRows[comparisonIndex]?.length || 0;
+    }
+
+    return {
+        filtered,
+        total,
+        delta: total - filtered,
+    };
+};

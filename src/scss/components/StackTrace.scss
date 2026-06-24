@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use '../definitions/colours' as *;
+@use '../definitions/variables' as variables;
+
+// Sticky source-path header padding; the negative top margin pulls it over the
+// container's top padding while leaving the 1px top border visible.
+$source-path-vertical-padding: 20px;
+$container-border-width: 1px;
+
+.stack-trace {
+    margin-top: 0;
+
+    .stack-trace-title {
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    .formatted-code {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px;
+        padding-left: 0;
+        background-color: $tt-black;
+        margin-top: 0;
+
+        &.is-inline {
+            overflow: hidden scroll;
+            max-height: 500px; // Allows sticky behaviour to work within operation list
+
+            .code-wrapper {
+                padding-top: 0;
+                padding-bottom: 0;
+                overflow: hidden scroll;
+            }
+
+            .stack-trace-buttons.is-sticky {
+                position: sticky;
+                top: 5px;
+                z-index: variables.$z-index-2-interactive;
+            }
+        }
+
+        &.intent-danger {
+            border: 1px solid $tt-red-shade;
+        }
+    }
+
+    .stack-trace-source-remap-notice {
+        margin-bottom: 12px;
+    }
+
+    .stack-trace-path {
+        color: $tt-grey-5;
+        position: sticky;
+        top: 0;
+        left: 0;
+        background-color: $tt-source-overlay-background;
+        z-index: variables.$z-index-2-interactive;
+        padding-top: $source-path-vertical-padding;
+        padding-bottom: $source-path-vertical-padding;
+        margin-top: -($source-path-vertical-padding - $container-border-width);
+        margin-right: 30px; // Avoids overlapping with source-file-controls
+        margin-bottom: 0;
+    }
+
+    .code-wrapper {
+        flex-basis: 100%;
+        flex-shrink: 1;
+        padding: 6px 0;
+    }
+
+    .code-output {
+        text-wrap: balance;
+    }
+
+    .stack-trace-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-items: flex-end;
+
+        &.is-sticky {
+            position: sticky;
+            top: 0;
+            right: 0;
+        }
+    }
+
+    .ttnn-line {
+        padding-left: 70px;
+        position: relative;
+        min-height: 18px; // Magic Number!
+
+        .line-number {
+            position: absolute;
+            text-align: right;
+            left: 5px;
+            font-size: 1em;
+            color: $tt-grey-5;
+            min-width: 35px;
+        }
+
+        &::before {
+            content: '';
+            display: block;
+            border-left: 1px solid $tt-grey-4;
+            width: 1px;
+            height: 100%;
+            position: absolute;
+            left: 55px;
+        }
+
+        &.highlighted-line {
+            background-color: $tt-slate;
+
+            .line-number {
+                color: $tt-grey-7;
+            }
+        }
+    }
+}
+
+.source-file-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: variables.$z-index-2-interactive;
+    opacity: 0.5;
+
+    &:hover {
+        opacity: 1;
+    }
+
+    .buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-items: flex-start;
+    }
+}

@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import React, { useState } from 'react';
+import { useAtom } from 'jotai';
+import { FileInput, FormGroup, Icon, IconName, Intent } from '@blueprintjs/core';
+import { IconNames } from '@blueprintjs/icons';
+import useLocalConnection from '../../hooks/useLocal';
+import { ConnectionTestStates } from '../../definitions/ConnectionStatus';
+import { activeNpeOpTraceAtom } from '../../store/app';
+import createToastNotification, { ToastType } from '../../functions/createToastNotification';
+import getResponseError from '../../functions/getResponseError';
+import sanitiseFileName from '../../functions/sanitiseFileName';
+import 'styles/components/FileLoader.scss';
+
+const ICON_MAP: Record<ConnectionTestStates, IconName> = {
+    [ConnectionTestStates.IDLE]: IconNames.DOT,
+    [ConnectionTestStates.PROGRESS]: IconNames.DOT,
+    [ConnectionTestStates.FAILED]: IconNames.CROSS,
+    [ConnectionTestStates.OK]: IconNames.TICK,
+    [ConnectionTestStates.WARNING]: IconNames.WARNING_SIGN,
+};
+
+const INTENT_MAP: Record<ConnectionTestStates, Intent> = {
+    [ConnectionTestStates.IDLE]: Intent.NONE,
+    [ConnectionTestStates.PROGRESS]: Intent.WARNING,
+    [ConnectionTestStates.FAILED]: Intent.DANGER,
+    [ConnectionTestStates.OK]: Intent.SUCCESS,
+    [ConnectionTestStates.WARNING]: Intent.WARNING,
+};
+
+const NPEFileLoader = () => {
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const { uploadNpeFile } = useLocalConnection();
+    const [npeFileName, setActiveNpe] = useAtom(activeNpeOpTraceAtom);
+    const [uploadStatus, setUploadStatus] = useState<ConnectionTestStates>(ConnectionTestStates.IDLE);
+
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        setErrorMessage('Uploading...');
+        setUploadStatus(ConnectionTestStates.PROGRESS);
+
+        if (!event.target.files) {
+            return;
+        }
+
+        const file = event.target.files?.[0];
+
+        try {
+            const response = await uploadNpeFile(event.target.files);
+
+            if (response?.data?.status !== ConnectionTestStates.OK) {
+                setUploadStatus(ConnectionTestStates.FAILED);
+                setErrorMessage(response?.data?.message ?? 'Upload failed');
+            } else {
+                const fileName = file.name;
+                setActiveNpe(sanitiseFileName(fileName));
+                createToastNotification('Active NPE', fileName, ToastType.SUCCESS);
+                setUploadStatus(ConnectionTestStates.OK);
+                setErrorMessage(`${fileName} uploaded successfully`);
+            }
+        } catch (err: unknown) {
+            setUploadStatus(ConnectionTestStates.FAILED);
+            setErrorMessage(getResponseError(err, 'Unable to upload file'));
+        }
+    };
+
+    return (
+        <FormGroup className='file-loader'>
+            <div className='form-container'>
+                <FileInput
+                    text={npeFileName ?? 'Upload an NPE report file for analysis...'}
+                    onInputChange={handleFileChange}
+                />
+
+                <div className='folder-upload-status'>
+                    {uploadStatus ? (
+                        <>
+                            <Icon
+                                icon={ICON_MAP[uploadStatus]}
+                                size={20}
+                                intent={INTENT_MAP[uploadStatus]}
+                            />
+
+                            <span className='message'>{errorMessage}</span>
+                        </>
+                    ) : null}
+                </div>
+            </div>
+        </FormGroup>
+    );
+};
+
+export default NPEFileLoader;

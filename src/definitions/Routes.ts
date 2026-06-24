@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+const ROUTES = Object.freeze({
+    HOME: '/',
+    OPERATIONS: '/operations',
+    TENSORS: '/tensors',
+    BUFFERS: '/buffer-summary',
+    STYLEGUIDE: '/styleguide',
+    GRAPHTREE: '/graphtree',
+    PERFORMANCE: '/performance',
+    NPE: '/npe',
+    MLIR: '/mlir',
+    CLUSTER: '/cluster',
+});
+
+export default ROUTES;

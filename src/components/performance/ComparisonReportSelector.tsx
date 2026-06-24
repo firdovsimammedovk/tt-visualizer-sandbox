@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import { Button, ButtonVariant, FormGroup } from '@blueprintjs/core';
+import { useAtom, useAtomValue } from 'jotai';
+import React from 'react';
+import { IconNames } from '@blueprintjs/icons';
+import classNames from 'classnames';
+import LocalFolderPicker from '../report-selection/LocalFolderPicker';
+import { ReportFolder } from '../../definitions/Reports';
+import { activePerformanceReportAtom, comparisonPerformanceReportListAtom } from '../../store/app';
+import { TEST_IDS } from '../../definitions/TestIds';
+
+interface ComparisonReportSelectorProps {
+    folderList: ReportFolder[];
+    reportIndex: number;
+    label?: React.ReactNode;
+    subLabel?: string;
+    className?: string;
+}
+
+const ComparisonReportSelector = ({
+    folderList,
+    reportIndex,
+    label,
+    subLabel,
+    className,
+}: ComparisonReportSelectorProps) => {
+    const [comparisonReportList, setComparisonReportList] = useAtom(comparisonPerformanceReportListAtom);
+    const activePerformanceReport = useAtomValue(activePerformanceReportAtom);
+
+    return (
+        <FormGroup
+            className={classNames('form-group', className)}
+            label={label}
+            subLabel={subLabel}
+            data-testid={TEST_IDS.COMPARISON_REPORT_SELECTOR}
+        >
+            <div className='folder-selection'>
+                <LocalFolderPicker
+                    items={folderList.filter((folder: ReportFolder) => {
+                        const selectedReports = (comparisonReportList || []).filter(
+                            (_reportName, index) => index !== reportIndex,
+                        );
+
+                        return folder.path !== activePerformanceReport?.path && !selectedReports.includes(folder.path);
+                    })}
+                    value={comparisonReportList?.[reportIndex] || null}
+                    handleSelect={(folder: ReportFolder) => {
+                        const updatedReports = [...(comparisonReportList || [])];
+                        updatedReports[reportIndex] = folder.reportName;
+
+                        setComparisonReportList(updatedReports);
+                    }}
+                />
+
+                <Button
+                    variant={ButtonVariant.OUTLINED}
+                    icon={IconNames.CROSS}
+                    onClick={() => {
+                        const updatedReports = [...(comparisonReportList || [])];
+                        updatedReports.splice(reportIndex, 1);
+
+                        setComparisonReportList(updatedReports?.length === 0 ? null : updatedReports);
+                    }}
+                    disabled={!comparisonReportList?.[reportIndex]}
+                    aria-label={comparisonReportList?.[reportIndex] ? `Remove report` : 'No report selected'}
+                />
+            </div>
+        </FormGroup>
+    );
+};
+
+export default ComparisonReportSelector;

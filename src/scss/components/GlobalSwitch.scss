@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use '../definitions/colours' as *;
+
+.global-switch {
+    &.bp6-control.bp6-switch {
+        &.primary {
+            input:checked ~ .bp6-control-indicator {
+                background-color: $tt-green-tint-1;
+            }
+
+            input:checked:not(:disabled):active ~ .bp6-control-indicator {
+                background-color: $tt-green;
+            }
+        }
+
+        // Add further Intents here as needed
+    }
+}

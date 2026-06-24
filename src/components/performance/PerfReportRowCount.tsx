@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import { useAtomValue } from 'jotai';
+import { filterBySignpostAtom, isStackedViewAtom } from '../../store/app';
+
+interface PerfReportRowCountProps {
+    filteredCount: number;
+    total: number;
+    delta: number;
+    useNormalisedData: boolean;
+}
+
+const PerfReportRowCount = ({ filteredCount, total, delta, useNormalisedData }: PerfReportRowCountProps): string => {
+    const isStackedView = useAtomValue(isStackedViewAtom);
+    const signpostFilterCount = useAtomValue(filterBySignpostAtom).filter((signpost) => signpost !== null).length;
+
+    const computedTotal = signpostFilterCount > 0 && !isStackedView ? total + signpostFilterCount : total;
+
+    // Delta doesn't apply to stacked view
+    const computedDelta = isStackedView ? 0 : delta;
+
+    return getRowCount(filteredCount, computedTotal, computedDelta, useNormalisedData);
+};
+
+const getRowCount = (filteredCount: number, totalCount: number, delta: number, useNormalisedData: boolean): string => {
+    const deltaLabel = delta === 1 || delta === -1 ? 'op' : 'ops';
+    const rowCountText =
+        filteredCount !== totalCount ? `Showing ${filteredCount} of ${totalCount} rows` : `Showing ${totalCount} rows`;
+    const rowDeltaText =
+        useNormalisedData && delta
+            ? ` (${delta > 0 ? `${delta} ${deltaLabel} added` : `${Math.abs(delta)} ${deltaLabel} removed`})`
+            : null;
+
+    return `${rowCountText}${rowDeltaText ?? ''}`;
+};
+
+export default PerfReportRowCount;

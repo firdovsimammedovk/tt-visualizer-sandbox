@@ -1,0 +1,10 @@
+.github
+.vscode
+eslint.config
+release/dist
+src/sample-data
+*.md
+*.json
+*.yml
+*.yaml
+/docs/output/**

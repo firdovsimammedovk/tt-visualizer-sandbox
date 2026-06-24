@@ -1,0 +1,332 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+@use 'sass:color';
+@use '../definitions/colours' as *;
+@use '../definitions/variables' as variables;
+
+.npe {
+    position: relative;
+
+    .header {
+        position: sticky;
+        top: 0;
+        background-color: $tt-grey-2;
+    }
+
+    .npe-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: start;
+
+        .npe-controls-line {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .bp6-switch {
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .zones-open-panel-btn {
+            &:not([class*='bp6-intent-'], [class*='bp6-disabled']) {
+                background-color: rgba($tt-zone-color, 0.2);
+
+                &:hover {
+                    background-color: rgba($tt-zone-color, 0.5);
+                }
+            }
+
+            border: 1px solid rgba($tt-zone-color, 0);
+
+            &.bp6-active {
+                border: 1px solid $tt-zone-color;
+            }
+        }
+    }
+
+    .bp6-slider-progress {
+        background-color: $tt-black;
+
+        &.duplicate {
+            left: 0;
+            bottom: 0;
+            position: absolute;
+            z-index: variables.$z-index-0-background;
+        }
+    }
+
+    .split-grid {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        border: 1px solid $tt-grey-5;
+
+        .grid-spacer {
+            width: variables.$active-transfer-width;
+        }
+    }
+
+    .metadata {
+        min-width: 300px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 10px;
+        border-bottom: 1px solid $tt-slate;
+        position: absolute;
+        right: 20px;
+        top: -100px;
+        gap: 5px;
+        background-color: rgba($tt-grey-2, 0.87);
+        z-index: variables.$z-index-3-overlay;
+
+        .collapsible-component {
+            width: 100%;
+        }
+
+        .collapsible-controls {
+            button {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                padding-left: 0;
+            }
+        }
+
+        .title {
+            font-size: 1.17em;
+            margin-top: 0;
+            margin-bottom: 6px;
+        }
+
+        hr {
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+    }
+
+    button.timestep {
+        font-size: 10px;
+        padding: 2px;
+        min-width: 10px;
+        min-height: 10px;
+    }
+
+    .chip-cluster-wrap {
+        display: grid;
+        gap: 10px;
+        overflow: auto;
+        scrollbar-gutter: stable;
+        flex: 1 1 0;
+        padding: 10px;
+    }
+
+    .chip {
+        position: relative;
+    }
+
+    .tensix-grid {
+        display: grid;
+        gap: 1px;
+
+        &.empty {
+            position: absolute;
+            z-index: variables.$z-index-0-background;
+            top: 0;
+            left: 0;
+            border: 2px dashed $tt-grey-5;
+        }
+
+        &.transfers,
+        &.transfer-single {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: grid;
+        }
+
+        &.transfer-single {
+            z-index: variables.$z-index-2-interactive;
+        }
+
+        .chip-id {
+            font-size: 100px;
+            opacity: 0.5;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: $tt-grey-5;
+            text-align: center;
+        }
+
+        .tensix {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid transparent;
+            z-index: variables.$z-index-2-interactive;
+            cursor: pointer;
+            overflow: hidden;
+            position: relative;
+
+            &:hover {
+                transition: border-color 50ms linear;
+                border-color: $tt-yellow-tint-2;
+            }
+
+            &.active {
+                border-color: $tt-tensix-active;
+            }
+
+            &.empty-tensix {
+                border: 1px solid $tt-black;
+                position: relative;
+            }
+
+            &.selected-zone {
+                border: 2px solid $tt-zone-color;
+                inset: -1px;
+            }
+
+            &.no-click {
+                border: 1px solid transparent;
+                pointer-events: none;
+
+                &:hover {
+                    border: 1px solid $tt-yellow-tint-2;
+                }
+            }
+
+            .transfer-render-ctn {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+
+            &.selected {
+                border-color: $tt-yellow-tint-2;
+                margin: 2px;
+
+                .transfer-render-ctn {
+                    inset: -2px;
+                }
+            }
+
+            .src-dst {
+                position: relative;
+            }
+
+            &.src {
+                border: 2px solid variables.$npe-highlight-src;
+                inset: 2px;
+
+                &.route-origin {
+                    background-image: repeating-linear-gradient(
+                        45deg,
+                        variables.$npe-highlight-src,
+                        variables.$npe-highlight-src 2px,
+                        transparent 2px,
+                        transparent 15px
+                    );
+                }
+            }
+
+            &.dst {
+                border: 2px solid variables.$npe-highlight-dst;
+                inset: 2px;
+
+                &.route-origin {
+                    background-image: repeating-linear-gradient(
+                        45deg,
+                        variables.$npe-highlight-dst,
+                        variables.$npe-highlight-dst 2px,
+                        transparent 2px,
+                        transparent 15px
+                    );
+                }
+            }
+
+            &.both {
+                $dash-size: 10deg;
+
+                inset: 2px;
+                border: 2px solid transparent;
+                border-image: repeating-conic-gradient(
+                        variables.$npe-highlight-src 0deg,
+                        variables.$npe-highlight-src $dash-size,
+                        variables.$npe-highlight-dst $dash-size,
+                        variables.$npe-highlight-dst calc(2 * $dash-size)
+                    )
+                    1;
+            }
+        }
+    }
+
+    .node-type-d {
+        fill: $c-dram;
+        background-color: $c-dram;
+    }
+
+    .node-type-c {
+        fill: $c-core;
+        background-color: $c-core;
+    }
+
+    .node-type-r {
+        fill: $c-router;
+        background-color: $c-router;
+    }
+
+    .node-type-e {
+        fill: $c-eth;
+        background-color: $c-eth;
+    }
+
+    .node-type-p {
+        fill: $c-pcix;
+        background-color: $c-pcix;
+    }
+
+    .node-type {
+        border-bottom: 2px solid transparent;
+    }
+
+    .node-type-label {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        top: 0;
+        right: 0;
+        color: $tt-grey-2;
+        font-size: 11px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+.timeline-tooltip-anchor {
+    position: absolute;
+    top: 0;
+    width: 0;
+    height: 0;
+    background-color: $tt-white;
+    z-index: variables.$z-index-2-interactive;
+}
+
+.congestion-heatmap-tooltip {
+    h3 {
+        margin: 0;
+        margin-bottom: 10px;
+    }
+}

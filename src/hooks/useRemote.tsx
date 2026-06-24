@@ -1,0 +1,323 @@
+// SPDX-License-Identifier: Apache-2.0
+//
+// SPDX-FileCopyrightText: © 2025 Tenstorrent AI ULC
+
+import axios, { HttpStatusCode } from 'axios';
+import { useCallback } from 'react';
+import { ConnectionTestStates } from '../definitions/ConnectionStatus';
+import { MountRemoteFolder, RemoteConnection, RemoteFolder } from '../definitions/RemoteConnection';
+import axiosInstance from '../libs/axiosInstance';
+import useAppConfig from './useAppConfig';
+import { normaliseReportFolder } from '../functions/validateReportFolder';
+import Endpoints from '../definitions/Endpoints';
+import { StackSourceOrigin } from '../definitions/StackTrace';
+
+interface StackSourceAvailability {
+    available: boolean;
+    source: StackSourceOrigin | null;
+}
+
+interface StackSourceReadResponse {
+    content?: string;
+    resolved_path?: string | null;
+}
+
+const FAILED_NO_CONNECTION = {
+    status: ConnectionTestStates.FAILED,
+    message: 'No connection provided',
+};
+const FAILED_NO_PATH = {
+    status: ConnectionTestStates.FAILED,
+    message: 'Please provide at least one folder path.',
+};
+export const LOCAL_STORAGE_KEY_CONNECTIONS = 'remoteConnections';
+export const LOCAL_STORAGE_KEY_SELECTED = 'selectedConnection';
+
+const useRemoteConnection = () => {
+    const { getAppConfig, setAppConfig, deleteAppConfig } = useAppConfig();
+
+    const testConnection = async (connection: Partial<RemoteConnection>) => {
+        if (!connection.host || !connection.port) {
+            return [FAILED_NO_CONNECTION];
+        }
+
+        if (!connection.profilerPath && !connection.performancePath) {
+            return [FAILED_NO_PATH];
+        }
+
+        const { data: connectionTestStates } = await axiosInstance.post(`${Endpoints.REMOTE}/test`, connection);
+
+        return connectionTestStates;
+    };
+
+    const listProfilerReports = async (connection?: RemoteConnection): Promise<RemoteFolder[]> => {
+        if (!connection || !connection.host || !connection.port) {
+            throw new Error('No connection provided');
+        }
+
+        if (!connection.profilerPath) {
+            return [];
+        }
+
+        const response = await axiosInstance.post<RemoteFolder[]>(`${Endpoints.REMOTE}/profiler-reports`, connection);
+
+        if (response.status === HttpStatusCode.NoContent) {
+            return [];
+        }
+
+        const reportFolders = Array.isArray(response.data) ? response.data : [];
+
+        return reportFolders.map(normaliseReportFolder) as RemoteFolder[];
+    };
+
+    const listPerformanceReports = async (connection?: RemoteConnection): Promise<RemoteFolder[]> => {
+        if (!connection || !connection.host || !connection.port) {
+            throw new Error('No connection provided');
+        }
+
+        if (!connection.performancePath) {
+            return [];
+        }
+
+        const response = await axiosInstance.post<RemoteFolder[]>(
+            `${Endpoints.REMOTE}/performance-reports`,
+            connection,
+        );
+
+        if (response.status === HttpStatusCode.NoContent) {
+            return [];
+        }
+
+        const performanceFolders = Array.isArray(response.data) ? response.data : [];
+
+        return performanceFolders;
+    };
+
+    const syncRemoteFolder = async (
+        connection?: RemoteConnection,
+        profilerRemoteFolder?: RemoteFolder,
+        performanceRemoteFolder?: RemoteFolder,
+    ) => {
+        if (!connection || !connection.host || !connection.port || !connection.profilerPath) {
+            throw new Error('No connection provided');
+        }
+
+        if (!profilerRemoteFolder && !performanceRemoteFolder) {
+            throw new Error('No remote folder provided');
+        }
+
+        return axiosInstance.post<RemoteFolder>(`${Endpoints.REMOTE}/sync`, {
+            connection,
+            profiler: profilerRemoteFolder,
+            performance: performanceRemoteFolder,
+        });
+    };
+
+    const mountRemoteFolder = async (
+        connection: RemoteConnection,
+        profilerRemoteFolder?: RemoteFolder,
+        performanceRemoteFolder?: RemoteFolder,
+    ) => {
+        return axiosInstance.post<MountRemoteFolder>(`${Endpoints.REMOTE}/use`, {
+            connection,
+            profiler: profilerRemoteFolder,
+            performance: performanceRemoteFolder,
+        });
+    };
+
+    const persistentState = {
+        get savedConnectionList(): RemoteConnection[] {
+            const connectionList = safeJsonParse(getAppConfig(LOCAL_STORAGE_KEY_CONNECTIONS), []);
+            const parsedList = Array.isArray(connectionList) ? connectionList.filter(isValidConnection) : [];
+
+            return parsedList;
+        },
+        set savedConnectionList(connectionList: RemoteConnection[]) {
+            setAppConfig(LOCAL_STORAGE_KEY_CONNECTIONS, safeJsonStringify(connectionList, '[]'));
+        },
+        get selectedConnection(): RemoteConnection | undefined {
+            const savedSelectedConnection = safeJsonParse(
+                getAppConfig(LOCAL_STORAGE_KEY_SELECTED),
+                null,
+            ) as RemoteConnection | null;
+
+            const connectionList = this.savedConnectionList;
+
+            if (!savedSelectedConnection || !isValidConnection(savedSelectedConnection)) {
+                return connectionList[0];
+            }
+
+            const existingConnection = connectionList.find(
+                (connection) => connection.name === savedSelectedConnection.name,
+            );
+
+            return existingConnection ?? connectionList[0];
+        },
+        set selectedConnection(connection: RemoteConnection | undefined) {
+            setAppConfig(LOCAL_STORAGE_KEY_SELECTED, safeJsonStringify(connection ?? null));
+        },
+        getSavedReportFolders: (connection?: RemoteConnection): RemoteFolder[] => {
+            const parsedList = safeJsonParse(getAppConfig(`${connection?.name} - reportFolders`), []);
+
+            return Array.isArray(parsedList) ? parsedList : [];
+        },
+        setSavedReportFolders: (connection: RemoteConnection | undefined, folders: RemoteFolder[]) => {
+            setAppConfig(`${connection?.name} - reportFolders`, safeJsonStringify(folders, '[]'));
+        },
+        deleteSavedReportFolders: (connection?: RemoteConnection) => {
+            deleteAppConfig(`${connection?.name} - reportFolders`);
+        },
+        getSavedPerformanceFolders: (connection?: RemoteConnection): RemoteFolder[] => {
+            const parsedList = safeJsonParse(getAppConfig(`${connection?.name} - performanceFolders`), []);
+
+            return Array.isArray(parsedList) ? parsedList : [];
+        },
+        setSavedPerformanceFolders: (connection: RemoteConnection | undefined, folders: RemoteFolder[]) => {
+            setAppConfig(`${connection?.name} - performanceFolders`, safeJsonStringify(folders, '[]'));
+        },
+        deleteSavedPerformanceFolders: (connection?: RemoteConnection) => {
+            deleteAppConfig(`${connection?.name} - performanceFolders`);
+        },
+        updateSavedRemoteFoldersConnection(oldConnection?: RemoteConnection, newConnection?: RemoteConnection) {
+            const reportFolders = this.getSavedReportFolders(oldConnection);
+            const performanceFolders = this.getSavedPerformanceFolders(oldConnection);
+
+            this.deleteSavedReportFolders(oldConnection);
+            this.deleteSavedPerformanceFolders(oldConnection);
+            this.setSavedReportFolders(newConnection, reportFolders);
+            this.setSavedPerformanceFolders(newConnection, performanceFolders);
+        },
+    };
+
+    const setPersistentSelectedConnection = (connection: RemoteConnection | undefined) => {
+        setAppConfig(LOCAL_STORAGE_KEY_SELECTED, safeJsonStringify(connection ?? null));
+    };
+
+    const setPersistentSavedConnectionList = (connectionList: RemoteConnection[]) => {
+        setAppConfig(LOCAL_STORAGE_KEY_CONNECTIONS, safeJsonStringify(connectionList, '[]'));
+    };
+
+    const isSourceFileAvailable = useCallback(
+        async (
+            filePath: string,
+            signal?: AbortSignal,
+            sourceFileId?: number | null,
+        ): Promise<StackSourceAvailability> => {
+            try {
+                const params: { filePath?: string; sourceFileId?: number } = {};
+                if (filePath) {
+                    params.filePath = filePath;
+                }
+                if (sourceFileId != null) {
+                    params.sourceFileId = sourceFileId;
+                }
+                const { data } = await axiosInstance.get<{
+                    available?: boolean;
+                    source?: StackSourceOrigin | null;
+                }>(`${Endpoints.REMOTE}/stack-trace/test`, {
+                    signal,
+                    params,
+                });
+
+                const available = data?.available === true;
+                const rawSource = data?.source;
+                const knownSource =
+                    typeof rawSource === 'string' && (Object.values(StackSourceOrigin) as string[]).includes(rawSource)
+                        ? (rawSource as StackSourceOrigin)
+                        : null;
+                return {
+                    available,
+                    source: available ? knownSource : null,
+                };
+            } catch {
+                return { available: false, source: null };
+            }
+        },
+        [],
+    );
+
+    const readRemoteFile = async (filePath: string, sourceFileId?: number | null) => {
+        try {
+            const params: { filePath?: string; sourceFileId?: number } = {};
+            if (filePath) {
+                params.filePath = filePath;
+            }
+            if (sourceFileId != null) {
+                params.sourceFileId = sourceFileId;
+            }
+            const { data } = await axiosInstance.get<StackSourceReadResponse>(`${Endpoints.REMOTE}/stack-trace/read`, {
+                params,
+            });
+
+            const content = typeof data?.content === 'string' ? data.content : null;
+            const resolvedPath = typeof data?.resolved_path === 'string' ? data.resolved_path : null;
+
+            return {
+                data: content,
+                error: null,
+                resolvedPath,
+            };
+        } catch (error: unknown) {
+            const standardError = {
+                data: null,
+                resolvedPath: null,
+                error: 'An unexpected error occurred',
+            };
+
+            if (axios.isAxiosError(error)) {
+                return {
+                    ...standardError,
+                    error: error.response?.data?.error || error.message || 'Failed to read remote file',
+                };
+            }
+
+            return standardError;
+        }
+    };
+
+    return {
+        testConnection,
+        syncRemoteFolder,
+        listProfilerReports,
+        listPerformanceReports,
+        mountRemoteFolder,
+        persistentState,
+        setPersistentSelectedConnection,
+        setPersistentSavedConnectionList,
+        readRemoteFile,
+        isSourceFileAvailable,
+    };
+};
+
+// Could make these more generic but they're only used in useRemote right now
+const safeJsonParse = <T,>(value: string | null, fallback: T): T => {
+    try {
+        return value ? JSON.parse(value) : fallback;
+    } catch {
+        return fallback;
+    }
+};
+
+const safeJsonStringify = <T,>(value: T, fallback: string = 'null'): string => {
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return fallback;
+    }
+};
+
+const isValidConnection = (connection?: Partial<RemoteConnection>) => {
+    if (
+        !connection?.name ||
+        !connection?.username ||
+        !connection?.host ||
+        !connection?.port ||
+        (!connection?.profilerPath && !connection?.performancePath)
+    ) {
+        return false;
+    }
+
+    return true;
+};
+
+export default useRemoteConnection;
