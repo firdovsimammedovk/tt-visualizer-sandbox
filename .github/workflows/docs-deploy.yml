@@ -1,0 +1,93 @@
+name: Docs - Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Read .python-version
+        id: python
+        run: echo "PYTHON_VERSION=$(cat .python-version)" >> $GITHUB_OUTPUT
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ steps.python.outputs.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Install documentation dependencies
+        run: uv sync --frozen --no-default-groups --group docs
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build versioned docs
+        run: |
+          mkdir -p docs/output
+
+          # Build latest
+          DOCS_VERSION=latest uv run --frozen --no-default-groups --group docs \
+            sphinx-build docs docs/output/latest
+
+          # Build each git tag
+          for TAG in $(git tag -l 'v*' --sort=-version:refname); do
+            git checkout "$TAG" -- docs/
+            DOCS_VERSION="$TAG" uv run --frozen --no-default-groups --group docs \
+              sphinx-build docs "docs/output/$TAG"
+            git checkout HEAD -- docs/
+          done
+
+          # Generate versions.json
+          python - <<'PYEOF'
+          import json, subprocess
+          tags = subprocess.check_output(
+              ["git", "tag", "-l", "v*", "--sort=-version:refname"]
+          ).decode().strip().split("\n")
+          tags = [t for t in tags if t]
+          base = "https://firdovsimammedovk.github.io/tt-visualizer-sandbox/"
+          versions = [{"name": "latest", "url": f"{base}latest/"}] + [
+              {"name": t, "url": f"{base}{t}/"} for t in tags
+          ]
+          with open("docs/output/versions.json", "w") as f:
+              json.dump({"versions": versions}, f, indent=2)
+          PYEOF
+
+          # Root redirect to latest
+          echo '<meta http-equiv="refresh" content="0; url=latest/">' > docs/output/index.html
+          touch docs/output/.nojekyll
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/output
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -83,14 +83,51 @@ exclude_patterns = []
 # a list of builtin themes.
 #
 
+import subprocess as _sp
+
+
+def _git_tags():
+    try:
+        out = _sp.check_output(
+            ["git", "tag", "-l", "v*", "--sort=-version:refname"],
+            stderr=_sp.DEVNULL,
+        ).decode().strip()
+        return [t for t in out.split("\n") if t]
+    except Exception:
+        return []
+
+
+_VISUALIZER_BASE = "https://firdovsimammedovk.github.io/tt-visualizer-sandbox/"
+_GLOBAL_CSS = "https://firdovsimammedovk.github.io/tenstorrent-sandbox/_static/tt_theme.css"
+_current_version = os.environ.get("DOCS_VERSION", "latest")
+
+_all_versions = ["latest"] + [t for t in _git_tags() if t != "latest"]
+_version_urls = [(v, f"{_VISUALIZER_BASE}{v}/") for v in _all_versions]
+
 html_theme = "sphinx_rtd_theme"
+html_theme_options = {
+    "collapse_navigation": True,
+    "titles_only": True,
+    "navigation_depth": 2,
+}
 html_logo = "shared/images/tt_logo.svg"
 html_favicon = "shared/images/favicon.png"
 html_static_path = ["shared/_static"]
+html_extra_path = []
 templates_path = ["shared/_templates"]
 html_last_updated_fmt = "%b %d, %Y"
-html_baseurl = f"https://docs.tenstorrent.com/{project}"
-html_context = {"logo_link_url": "https://docs.tenstorrent.com/"}
+
+html_baseurl = f"{_VISUALIZER_BASE}{_current_version}/"
+version = _current_version
+
+# Load global CSS from tenstorrent-sandbox CDN; local tt_theme.css adds overrides
+html_css_files = [_GLOBAL_CSS]
+
+html_context = {
+    "versions": _version_urls,
+    "current_version": _current_version,
+    "logo_link_url": "https://firdovsimammedovk.github.io/tenstorrent-sandbox/",
+}
 
 
 def setup(app):
