@@ -127,6 +127,7 @@ html_context = {
     "versions": _version_urls,
     "current_version": _current_version,
     "logo_link_url": "https://firdovsimammedovk.github.io/tenstorrent-sandbox/",
+    "search_site_base_url": _VISUALIZER_BASE,
 }
 
 
