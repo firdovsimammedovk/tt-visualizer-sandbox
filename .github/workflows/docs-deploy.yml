@@ -26,7 +26,7 @@ jobs:
       DOCS_ID_NAMESPACE: tt-visualizer
       DOCS_INDEX_VERSION: latest
       DOCS_OUTPUT_DIR: docs/output
-      DOCS_SEARCH_INGEST_API_KEY: ${{ secrets.DOCS_SEARCH_INGEST_API_KEY }}
+      DOCS_SEARCH_INGEST_API_KEY: ${{ secrets.DOCS_SEARCH_INGEST_API_KEY_DOCS_TENSTORRENT }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
