@@ -3,7 +3,6 @@ name: Docs - Build & Deploy
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -50,39 +49,11 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Build versioned docs
+      - name: Build docs
         run: |
           mkdir -p docs/output
-
-          # Build latest
-          DOCS_VERSION=latest uv run --frozen --no-default-groups --group docs \
-            sphinx-build docs docs/output/latest
-
-          # Build each git tag
-          for TAG in $(git tag -l 'v*' --sort=-version:refname); do
-            git checkout "$TAG" -- docs/
-            DOCS_VERSION="$TAG" uv run --frozen --no-default-groups --group docs \
-              sphinx-build docs "docs/output/$TAG"
-            git checkout HEAD -- docs/
-          done
-
-          # Generate versions.json
-          python - <<'PYEOF'
-          import json, subprocess
-          tags = subprocess.check_output(
-              ["git", "tag", "-l", "v*", "--sort=-version:refname"]
-          ).decode().strip().split("\n")
-          tags = [t for t in tags if t]
-          base = "https://firdovsimammedovk.github.io/tt-visualizer-sandbox/"
-          versions = [{"name": "latest", "url": f"{base}latest/"}] + [
-              {"name": t, "url": f"{base}{t}/"} for t in tags
-          ]
-          with open("docs/output/versions.json", "w") as f:
-              json.dump({"versions": versions}, f, indent=2)
-          PYEOF
-
-          # Root redirect to latest
-          echo '<meta http-equiv="refresh" content="0; url=latest/">' > docs/output/index.html
+          uv run --frozen --no-default-groups --group docs \
+            sphinx-build docs docs/output
           touch docs/output/.nojekyll
 
       - name: Warn if remote search ingest key is missing
